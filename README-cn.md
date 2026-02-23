@@ -1,0 +1,203 @@
+# WPS 协作 Channel for OpenClaw
+
+<div align="center">
+
+> [!WARNING]
+> **Experimental Version / 开发测试版**
+> 本插件目前处于 **开发/测试 (Alpha)** 阶段。
+> * ⚠️ **稳定性：** 核心逻辑（签名验证、消息解密等）尚未完成完整的全链路集成测试。
+> * ⚠️ **生产环境：** 暂不建议在正式生产环境或重要业务场景中使用。
+> * 🛠   **贡献：** 如果你在使用中遇到 Bug 或测试成功，欢迎提交 [Issue](https://github.com/skyispainted/openclaw-channel-wps-xiezuo/issues)。
+> 
+> 
+
+---
+
+**WPS Xiezuo (WPS 365) 企业机器人 Channel 插件**
+
+[English](README.md) | [中文](README-cn.md)
+
+</div>
+
+---
+
+本插件为 **WPS 协作 (WPS 365)** 企业内部机器人提供 Channel 支持，采用 HTTP 回调 (Webhook) 模式实现消息的无缝同步。
+
+## 致谢
+
+本项目基于 [@xieqiwen](https://github.com/xieqiwen) 的 [`simple-xiezuo`](https://www.google.com/search?q=%5Bhttps://github.com/xieqiwen/simple-xiezuo%5D(https://github.com/xieqiwen/simple-xiezuo)) 项目进行重构与适配。感谢其提供的基础框架支持。
+
+## 功能特性
+
+* ✅ **HTTP 回调模式** — 通过 Webhook 接收消息（需具备公网访问能力）。
+* ✅ **支持私聊 (DM)** — 与机器人进行 1 对 1 直接交互。
+* ✅ **支持群聊** — 在群组频道中通过 @机器人进行交互。
+* ✅ **OpenClaw 管道集成** — 完全兼容 OpenClaw AI 消息处理引擎。
+
+## 安装指南
+
+### 方法 A：通过 npm 安装（推荐用户使用）
+
+*注意：本仓库正准备发布至官方 registry。*
+
+```bash
+openclaw plugins install @skyispainted/wps-xiezuo
+```
+
+### 方法 B：通过本地源码安装（推荐开发者使用）
+
+如果你打算修改插件或进行贡献：
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/skyispainted/openclaw-channel-wps-xiezuo.git
+cd openclaw-channel-wps-xiezuo
+
+# 2. 安装依赖
+npm install
+
+# 3. 以链接模式安装（修改可实时生效）
+openclaw plugins install -l .
+```
+
+### 方法 C：手动安装
+
+1. 将目录复制到 `~/.openclaw/extensions/wps-xiezuo`。
+2. 确保 `index.ts`、`openclaw.plugin.json` 和 `package.json` 文件存在。
+3. 运行 `openclaw plugins list` 验证安装。
+
+---
+
+### 强制步骤：配置插件信任白名单 (`plugins.allow`)
+
+为了确保安全性，OpenClaw 要求对非内置插件进行显式授权。如果 `plugins.allow` 为空，系统将触发安全告警。
+
+#### 1. 确认插件 ID
+
+本插件的默认 ID 为 `wps-xiezuo`（定义于 `openclaw.plugin.json`）。
+
+#### 2. 更新 `~/.openclaw/openclaw.json`
+
+将 ID 添加到 `allow` 数组中：
+
+```json5
+{
+  "plugins": {
+    "enabled": true,
+    "allow": ["wps-xiezuo"]
+  }
+}
+```
+
+#### 3. 重启 Gateway
+
+```bash
+openclaw gateway restart
+```
+
+## 更新
+
+对于基于 npm 安装的版本：
+
+```bash
+openclaw plugins update wps-xiezuo
+```
+
+对于本地/链接安装的版本，请拉取最新代码并重启网关：
+
+```bash
+git pull
+openclaw gateway restart
+```
+
+## 配置说明
+
+### 方法 1：交互式 CLI 配置（推荐）
+
+OpenClaw 提供了引导式设置向导：
+
+```bash
+# 选项 A：完整入驻流程
+openclaw onboard
+
+# 选项 B：针对特定部分进行配置
+openclaw configure --section channels
+```
+
+**配置流程：**
+
+1. **选择插件:** 选择 `wps-xiezuo` 或 `WPS Xiezuo`。
+2. **App ID:** 输入你的 WPS AppId。
+3. **Secret Key:** 输入你的 WPS SecretKey。
+4. **Encrypt Key:** 输入你的 WPS EncryptKey。
+5. **API URL:** 默认值为 `https://openapi.wps.cn/v7/`。
+6. **回调 URL:** 你的公网 Webhook 接收地址。
+7. **策略设置:** 配置私聊和群聊策略（`open` 或 `allowlist`）。
+
+---
+
+#### WPS 开发者平台配置向导
+
+1. **创建应用:** 访问 [WPS 开放平台](https://open.wps.cn/) 并创建一个企业内部应用。
+2. **消息模式:** 设置为 **HTTP 回调模式**。
+3. **获取凭据:** 从控制台复制 **App ID**、**Secret Key** 和 **Encrypt Key**。
+4. **配置回调:** 将事件订阅 URL 设置为：
+`http://<您的公网IP>:<端口>/wps-xiezuo/callback`
+
+---
+
+### 方法 2：手动修改配置文件
+
+直接编辑 `~/.openclaw/openclaw.json`：
+
+```json5
+{
+  "channels": {
+    "wps-xiezuo": {
+      "enabled": true,
+      "appId": "your-app-id",
+      "secretKey": "your-secret-key",
+      "encryptKey": "your-encrypt-key",
+      "apiUrl": "https://openapi.wps.cn/v7/",
+      "dmPolicy": "open",
+      "groupPolicy": "open",
+      "debug": false
+    }
+  }
+}
+```
+
+## 配置项 Schema
+
+| 选项 | 类型 | 默认值 | 描述 |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `true` | 是否启用该 Channel。 |
+| `appId` | string | **必填** | WPS 应用的 AppId。 |
+| `secretKey` | string | **必填** | WPS 应用的 SecretKey。 |
+| `encryptKey` | string | **必填** | 用于消息解密的 AES 密钥。 |
+| `apiUrl` | string | `https://openapi.wps.cn/v7/` | WPS OpenAPI 端点地址。 |
+| `dmPolicy` | string | `"open"` | 私聊策略：`open` 或 `allowlist`。 |
+| `groupPolicy` | string | `"open"` | 群聊策略：`open` 或 `allowlist`。 |
+| `allowFrom` | string[] | `[]` | 已授权的用户 ID 列表（用于 `allowlist` 模式）。 |
+| `debug` | boolean | `false` | 是否开启详细日志用于故障排查。 |
+
+## 安全与策略
+
+### 私聊策略 (DM Policy)
+
+* `open`: 企业内的任何用户均可与机器人对话。
+* `allowlist`: 仅 `allowFrom` 列表中的用户可以进行交互。
+
+### 群聊策略 (Group Policy)
+
+* `open`: 机器人在被添加进的任何群组中都会响应 @mention。
+* `allowlist`: 机器人仅在特定的授权群组中响应。
+
+## 故障排除
+
+* **无响应:** 请确认应用已在 WPS 控制台“发布”，且服务器端口已对公网开放。
+* **解密错误:** 确保 `encryptKey` 与 WPS 控制台完全一致（通常为 16, 24 或 32 字节）。
+* **认证失败:** 检查 `appId` 或 `secretKey` 是否被重置，或应用是否已被禁用。
+* **查看日志:** 运行 `openclaw logs | grep wps-xiezuo` 进行实时调试。
+
+---

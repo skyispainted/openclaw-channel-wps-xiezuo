@@ -1,0 +1,83 @@
+{
+  "name": "@skyispainted/wps-xiezuo",
+  "version": "2026.02.24",
+  "description": "WPS协作（WPS365）聊天机器人插件，支持 OpenClaw",
+  "keywords": [
+    "bot",
+    "channel",
+    "openclaw",
+    "wps",
+    "wps365",
+    "xiezuo",
+    "collaboration",
+    "chatbot",
+    "plugin"
+  ],
+  "homepage": "https://github.com/skyispainted/openclaw-channel-wps-xiezuo",
+  "license": "MIT",
+  "author": "skyispainted",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skyispainted/openclaw-channel-wps-xiezuo.git"
+  },
+  "files": [
+    "index.ts",
+    "src/*.ts",
+    "openclaw.plugin.json",
+    "clawbot.plugin.json"
+  ],
+  "type": "module",
+  "main": "index.ts",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "format": "oxfmt --write package.json tsconfig.json index.ts src/*.ts",
+    "format:check": "oxfmt --check package.json tsconfig.json index.ts src/*.ts",
+    "lint": "oxlint --type-aware index.ts src",
+    "lint:fix": "oxlint --type-aware --fix index.ts src && pnpm format",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "type-check": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.0",
+    "oxfmt": "0.34.0",
+    "oxlint": "^1.49.0",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.2.13"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channels": [
+      "wps-xiezuo"
+    ],
+    "installDependencies": true,
+    "channel": {
+      "id": "wps-xiezuo",
+      "label": "WPS协作",
+      "selectionLabel": "WPS协作 (WPS Xiezuo)",
+      "docsPath": "/channels/wps-xiezuo",
+      "docsLabel": "wps-xiezuo",
+      "blurb": "WPS协作企业内部机器人，通过HTTP回调模式接收消息。",
+      "order": 80,
+      "aliases": [
+        "wps",
+        "xiezuo"
+      ]
+    },
+    "install": {
+      "npmSpec": "@skyispainted/wps-xiezuo",
+      "localPath": ".",
+      "defaultChoice": "npm"
+    }
+  }
+}

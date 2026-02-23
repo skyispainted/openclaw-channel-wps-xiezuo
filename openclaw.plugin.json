@@ -1,0 +1,11 @@
+{
+  "id": "wps-xiezuo",
+  "channels": [
+    "wps-xiezuo"
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {}
+  }
+}

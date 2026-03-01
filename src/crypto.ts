@@ -216,23 +216,23 @@ export function decryptEventData(
   try {
     // Base64 解码
     const encryptedBuffer = Buffer.from(encryptedData, "base64");
-    
-    // 使用 MD5(secretKey) 作为密钥
+
+    // 使用 MD5(secretKey) 作为密钥 - 修复：使用 hex 编码而不是 utf8
     const cipherHex = md5Hex(secretKey);
-    const keyBuffer = Buffer.from(cipherHex, "utf8");
-    
+    const keyBuffer = Buffer.from(cipherHex, "hex");
+
     // IV 向量取 nonce 的前 16 字节
     const ivBuffer = Buffer.from(nonce, "utf8").slice(0, 16);
-    
+
     // AES-256-CBC 解密
     const decipher = createDecipheriv("aes-256-cbc", keyBuffer, ivBuffer);
     decipher.setAutoPadding(true);
-    
+
     const decrypted = Buffer.concat([
       decipher.update(encryptedBuffer),
       decipher.final()
     ]);
-    
+
     return decrypted.toString("utf8");
   } catch (error) {
     throw new Error(`解密失败: ${error instanceof Error ? error.message : String(error)}`);

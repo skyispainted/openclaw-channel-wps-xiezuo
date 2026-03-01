@@ -324,10 +324,11 @@ async function handleMessageEvent(
     }
 
     let eventData: WPSEvent;
-    if (eventBody.encrypted_data && config.encryptKey) {
+    if (eventBody.encrypted_data && config.secretKey) {
       ctx.log?.debug?.(`[${accountId}] [Message] 🔓 解密事件数据...`);
+      ctx.log?.trace?.(`[${accountId}] [Message] 密钥长度: ${config.secretKey.length}, nonce: ${eventBody.nonce}`);
       const decryptedJson = decryptEventData(
-        config.encryptKey,
+        config.secretKey,
         eventBody.encrypted_data,
         eventBody.nonce
       );

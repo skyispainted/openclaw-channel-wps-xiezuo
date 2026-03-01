@@ -210,7 +210,7 @@ export function decryptEventData(
   }
 
   if (nonce.length < 16) {
-    throw new Error("nonce 长度不足 16 字节");
+    throw new Error(`nonce 长度不足 16 字节 (当前: ${nonce.length})`);
   }
 
   try {
@@ -220,6 +220,11 @@ export function decryptEventData(
     // 使用 MD5(secretKey) 作为密钥 - 修复：使用 hex 编码而不是 utf8
     const cipherHex = md5Hex(secretKey);
     const keyBuffer = Buffer.from(cipherHex, "hex");
+
+    // 检查密钥长度
+    if (keyBuffer.length !== 32) {
+      throw new Error(`密钥长度错误: ${keyBuffer.length} (期望: 32)`);
+    }
 
     // IV 向量取 nonce 的前 16 字节
     const ivBuffer = Buffer.from(nonce, "utf8").slice(0, 16);

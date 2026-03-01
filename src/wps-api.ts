@@ -79,6 +79,72 @@ export class WPSClient {
   }
 
   /**
+   * 发送V7请求（支持GET/POST等方法）
+   */
+  private async sendV7Request(
+    method: string,
+    path: string,
+    body: any,
+    accessToken: string
+  ): Promise<any> {
+    const url = `${this.apiUrl}${path}`;
+    const contentType = body ? "application/json" : undefined;
+    const ksoDate = getRFC1123Date();
+    const bodyString = body ? JSON.stringify(body) : "";
+
+    const ksoSignature = generateKSO1AuthHeader(
+      this.appId,
+      method,
+      path,
+      contentType || "",
+      ksoDate,
+      bodyString,
+      this.secretKey
+    );
+
+    // 使用 AbortController 实现超时控制
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const fetchOptions: RequestInit = {
+        method,
+        headers: {
+          "X-Kso-Date": ksoDate,
+          "X-Kso-Authorization": ksoSignature,
+          "Authorization": `Bearer ${accessToken}`,
+        },
+        signal: controller.signal,
+      };
+
+      // 只有POST/PUT等方法才设置body和Content-Type
+      if (method !== "GET" && method !== "HEAD" && body) {
+        fetchOptions.headers!["Content-Type"] = contentType!;
+        fetchOptions.body = bodyString;
+      }
+
+      const response = await fetch(url, fetchOptions);
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`WPS API请求失败 ${response.status}: ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("WPS API请求超时");
+      }
+
+      throw error;
+    }
+  }
+
+  /**
    * 下载文件到Buffer
    */
   async downloadFile(storageKey: string): Promise<Buffer> {
@@ -134,63 +200,6 @@ export class WPSClient {
     }
 
     return { result: result.code, msg: result.msg, message_id: result.data?.message_id };
-  }
-
-  private async sendV7Request(
-    method: string,
-    path: string,
-    body: any,
-    accessToken: string
-  ): Promise<any> {
-    const url = `${this.apiUrl}${path}`;
-    const contentType = "application/json";
-    const ksoDate = getRFC1123Date();
-    const bodyString = JSON.stringify(body);
-
-    const ksoSignature = generateKSO1AuthHeader(
-      this.appId,
-      method,
-      path,
-      contentType,
-      ksoDate,
-      bodyString,
-      this.secretKey
-    );
-
-    // 使用 AbortController 实现超时控制
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-    try {
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": contentType,
-          "X-Kso-Date": ksoDate,
-          "X-Kso-Authorization": ksoSignature,
-          "Authorization": `Bearer ${accessToken}`,
-        },
-        body: bodyString,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`WPS API请求失败 ${response.status}: ${errorText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new Error("WPS API请求超时");
-      }
-
-      throw error;
-    }
   }
 
   /**

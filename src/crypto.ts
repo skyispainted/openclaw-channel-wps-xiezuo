@@ -209,10 +209,6 @@ export function decryptEventData(
     throw new Error("解密参数不完整");
   }
 
-  if (nonce.length < 16) {
-    throw new Error(`nonce 长度不足 16 字节 (当前: ${nonce.length})`);
-  }
-
   try {
     // Base64 解码
     const encryptedBuffer = Buffer.from(encryptedData, "base64");
@@ -226,28 +222,86 @@ export function decryptEventData(
       throw new Error(`密钥长度错误: ${keyBuffer.length} (期望: 16)`);
     }
 
-    // IV 向量取 nonce 的前 16 字节
-    const ivBuffer = Buffer.from(nonce, "utf8").slice(0, 16);
+    // 根据官方文档，nonce 就是 IV 向量（直接使用，不进行 hex 解析）
+    // nonce 是字符串，转换为 Buffer 作为 IV
+    const ivBuffer = Buffer.from(nonce, "utf8");
+
+    // 确保 IV 长度为 16
+    if (ivBuffer.length < 16) {
+      throw new Error(`IV 长度不足: ${ivBuffer.length} (期望: 16)`);
+    }
+
+    // 如果超过 16，截取前 16 字节
+    const finalIv = ivBuffer.length > 16 ? ivBuffer.slice(0, 16) : ivBuffer;
 
     console.log("[DEBUG] 解密参数:");
     console.log(`  密钥 (hex): ${cipherHex}`);
     console.log(`  密钥长度: ${keyBuffer.length} bytes`);
-    console.log(`  IV (hex): ${ivBuffer.toString("hex")}`);
-    console.log(`  加密数据长度: ${encryptedBuffer.length} bytes`);
+    console.log(`  IV 长度: ${finalIv.length} bytes`);
+    console.log(`  IV (hex): ${finalIv.toString("hex")}`);
     console.log(`  Nonce: ${nonce}`);
     console.log(`  Nonce (hex): ${Buffer.from(nonce, "utf8").toString("hex")}`);
+    console.log(`  Nonce 原始长度: ${nonce.length} 字符`);
+    console.log(`  非常规解密尝试...`);
 
-    // AES-128-CBC 解密 (MD5 产生 16 字节密钥)
-    const decipher = createDecipheriv("aes-128-cbc", keyBuffer, ivBuffer);
-    decipher.setAutoPadding(true);
+    // 尝试多种解密方式
+    let decrypted: Buffer | null = null;
+    let errorMessages: string[] = [];
 
-    const decrypted = Buffer.concat([
-      decipher.update(encryptedBuffer),
-      decipher.final()
-    ]);
+    // 方式 1: 直接使用 nonce 的 UTF8 作为 IV（官方文档做法）
+    try {
+      const decipher1 = createDecipheriv("aes-128-cbc", keyBuffer, finalIv);
+      decipher1.setAutoPadding(true);
+      decrypted = Buffer.concat([
+        decipher1.update(encryptedBuffer),
+        decipher1.final()
+      ]);
+      console.log("[DEBUG] 方式 1 成功");
+      return decrypted.toString("utf8");
+    } catch (e) {
+      errorMessages.push(`方式 1 失败: ${e}`);
+    }
 
-    console.log(`[DEBUG] 解密成功，数据长度: ${decrypted.length} bytes`);
-    return decrypted.toString("utf8");
+    // 方式 2: 将 nonce 作为 hex 编码解析（如果它是十六进制字符串）
+    if (nonce.length >= 32) {
+      try {
+        const ivFromHex = Buffer.from(nonce.slice(0, 32), "hex");
+        const decipher2 = createDecipheriv("aes-128-cbc", keyBuffer, ivFromHex);
+        decipher2.setAutoPadding(true);
+        decrypted = Buffer.concat([
+          decipher2.update(encryptedBuffer),
+          decipher2.final()
+        ]);
+        console.log("[DEBUG] 方式 2 成功");
+        return decrypted.toString("utf8");
+      } catch (e) {
+        errorMessages.push(`方式 2 失败: ${e}`);
+      }
+    }
+
+    // 方式 3: 使用 nonce 重复填充到 16 字节
+    if (nonce.length < 16) {
+      const paddedNonce = (nonce + nonce.repeat(16)).slice(0, 16);
+      try {
+        const ivPadded = Buffer.from(paddedNonce, "utf8");
+        const decipher3 = createDecipheriv("aes-128-cbc", keyBuffer, ivPadded);
+        decipher3.setAutoPadding(true);
+        decrypted = Buffer.concat([
+          decipher3.update(encryptedBuffer),
+          decipher3.final()
+        ]);
+        console.log("[DEBUG] 方式 3 成功");
+        return decrypted.toString("utf8");
+      } catch (e) {
+        errorMessages.push(`方式 3 失败: ${e}`);
+      }
+    }
+
+    // 所有方式都失败
+    console.error("[ERROR] 所有解密方式都失败:");
+    errorMessages.forEach((msg, i) => console.error(`  ${i + 1}. ${msg}`));
+
+    throw new Error(`解密失败: 所有尝试都失败。请检查密钥和 nonce 是否正确`);
   } catch (error) {
     throw new Error(`解密失败: ${error instanceof Error ? error.message : String(error)}`);
   }

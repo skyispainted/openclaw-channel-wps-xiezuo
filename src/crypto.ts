@@ -221,14 +221,6 @@ export function decryptEventData(
     // 根据 Python 示例，nonce 也是直接用 UTF8 编码
     const ivBuffer = Buffer.from(nonce, "utf8");
 
-    console.log("[DEBUG] 解密参数 (Python 方式):");
-    console.log(`  secretKey: ${secretKey.substring(0, 8)}...`);
-    console.log(`  cipherHex: ${cipherHex}`);
-    console.log(`  密钥 (UTF8): ${keyBuffer.toString("hex")} (${keyBuffer.length} bytes)`);
-    console.log(`  Nonce: ${nonce}`);
-    console.log(`  IV (UTF8): ${ivBuffer.toString("hex")} (${ivBuffer.length} bytes)`);
-    console.log(`  加密数据长度: ${encryptedBuffer.length} bytes`);
-
     // 使用 AES-256 还是 AES-128？
     // Python 示例中，cipher 是 32 字节的 UTF8 编码，对应 AES-256
     let decipher;
@@ -248,9 +240,6 @@ export function decryptEventData(
       decipher.update(encryptedBuffer),
       decipher.final()
     ]);
-
-    console.log(`[DEBUG] 解密成功，数据长度: ${decrypted.length} bytes`);
-    console.log(`[DEBUG] 解密内容: ${decrypted.toString("utf8")}`);
 
     return decrypted.toString("utf8");
   } catch (error) {

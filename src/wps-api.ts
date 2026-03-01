@@ -21,43 +21,61 @@ export class WPSClient {
   }
 
   /**
-   * 获取文件临时下载链接
-   * 根据WPS开放平台文档，使用storage_key获取文件的临时访问链接
+   * 获取会话消息文件下载地址
+   *
+   * API文档: https://openapi.wps.cn/v7/chats/{chat_id}/messages/{message_id}/resources/{storage_key}/download
+   * 方法: GET
+   * 权限: kso.chat_message.readwrite
+   *
+   * @param chatId 会话ID
+   * @param messageId 消息ID
+   * @param storageKey 文件的storage_key
+   * @param fileName 可选，下载的文件名称
+   * @returns 临时下载链接
    */
-  async getDownloadUrl(storageKey: string): Promise<string> {
+  async getDownloadUrl(
+    chatId: string,
+    messageId: string,
+    storageKey: string,
+    fileName?: string
+  ): Promise<string> {
     const accessToken = await oauthTokenManager.getAccessToken(
       this.appId,
       this.secretKey,
       this.apiUrl
     );
 
-    // 尝试使用标准的文件下载API
-    // 根据WPS开放平台常见接口设计，使用以下路径之一
-    const pathsToTry = [
-      `/v7/messages/files/download`, // 可能的路径1
-      `/v7/files/download`,           // 可能的路径2
-      `/v7/message/files/download`    // 可能的路径3
-    ];
+    // 构造API路径
+    const path = `/v7/chats/${chatId}/messages/${messageId}/resources/${storageKey}/download`;
 
-    const body = { storage_key: storageKey };
-
-    for (const path of pathsToTry) {
-      try {
-        const result = await this.sendV7Request("POST", path, body, accessToken);
-
-        // 成功响应格式可能为:
-        // { "code": 0, "data": { "download_url": "https://..." } }
-        // 或 { "errcode": 0, "data": { "url": "https://..." } }
-        if (result.code === 0 || result.errcode === 0) {
-          return result.data?.download_url || result.data?.url;
-        }
-      } catch (error) {
-        // 继续尝试下一个路径
-        continue;
-      }
+    // 查询参数
+    const queryParams = new URLSearchParams();
+    if (fileName) {
+      queryParams.set("file_name", fileName);
     }
 
-    throw new Error(`无法获取文件下载链接，请确认storage_key有效`);
+    const fullPath = queryParams.toString()
+      ? `${path}?${queryParams.toString()}`
+      : path;
+
+    console.log(`[DEBUG] 调用文件下载API: GET ${fullPath}`);
+
+    try {
+      const result = await this.sendV7Request("GET", fullPath, null, accessToken);
+
+      console.log(`[DEBUG] 文件下载API响应:`, JSON.stringify(result));
+
+      // 响应格式: { "data": { "url": "string" }, "code": 0, "msg": "string" }
+      if (result.code === 0 && result.data?.url) {
+        console.log(`[DEBUG] 成功获取下载链接`);
+        return result.data.url;
+      }
+
+      throw new Error(`API返回错误: ${result.msg || "未知错误"}`);
+    } catch (error) {
+      console.error(`[ERROR] 获取文件下载链接失败:`, error);
+      throw error;
+    }
   }
 
   /**

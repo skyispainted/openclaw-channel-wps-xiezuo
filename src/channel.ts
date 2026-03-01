@@ -291,7 +291,8 @@ export async function handleWpsMessage(params: {
   if (parsed.mediaUrls && parsed.mediaUrls.length > 0 && parsed.mediaUrls[0].startsWith("wps-storage:")) {
     try {
       const storageKey = parsed.mediaUrls[0].replace("wps-storage:", "");
-      const downloadUrl = await client.getDownloadUrl(storageKey);
+      // 调用新的API，需要 chatId 和 messageId
+      const downloadUrl = await client.getDownloadUrl(parsed.chatId, messageId!, storageKey);
       resolvedMediaUrl = downloadUrl;
 
       log?.debug?.(`[WPS] 已解析图片URL: ${resolvedMediaUrl}`);

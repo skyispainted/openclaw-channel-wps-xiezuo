@@ -209,30 +209,38 @@ export function decryptEventData(
     throw new Error("解密参数不完整");
   }
 
-  if (nonce.length < 16) {
-    throw new Error("nonce 长度不足 16 字节");
-  }
-
   try {
     // Base64 解码
     const encryptedBuffer = Buffer.from(encryptedData, "base64");
-    
-    // 使用 MD5(secretKey) 作为密钥
+
+    // 使用 MD5(secretKey) 作为密钥 - 根据 Python 示例，密钥是 MD5 的十六进制字符串（作为 UTF8）
     const cipherHex = md5Hex(secretKey);
-    const keyBuffer = Buffer.from(cipherHex, "utf8");
-    
-    // IV 向量取 nonce 的前 16 字节
-    const ivBuffer = Buffer.from(nonce, "utf8").slice(0, 16);
-    
-    // AES-256-CBC 解密
-    const decipher = createDecipheriv("aes-256-cbc", keyBuffer, ivBuffer);
+    // 注意：根据 Python 示例，cipher 是直接用 UTF8 编码的十六进制字符串，不是解析为二进制
+    const keyBuffer = Buffer.from(cipherHex, "utf8");  // 直接使用 UTF8 编码
+
+    // 根据 Python 示例，nonce 也是直接用 UTF8 编码
+    const ivBuffer = Buffer.from(nonce, "utf8");
+
+    // 使用 AES-256 还是 AES-128？
+    // Python 示例中，cipher 是 32 字节的 UTF8 编码，对应 AES-256
+    let decipher;
+    if (keyBuffer.length === 32) {
+      // 密钥是 32 字节，使用 AES-256
+      decipher = createDecipheriv("aes-256-cbc", keyBuffer, ivBuffer);
+    } else if (keyBuffer.length === 16) {
+      // 密钥是 16 字节，使用 AES-128
+      decipher = createDecipheriv("aes-128-cbc", keyBuffer, ivBuffer);
+    } else {
+      throw new Error(`不支持的密钥长度: ${keyBuffer.length} 字节`);
+    }
+
     decipher.setAutoPadding(true);
-    
+
     const decrypted = Buffer.concat([
       decipher.update(encryptedBuffer),
       decipher.final()
     ]);
-    
+
     return decrypted.toString("utf8");
   } catch (error) {
     throw new Error(`解密失败: ${error instanceof Error ? error.message : String(error)}`);

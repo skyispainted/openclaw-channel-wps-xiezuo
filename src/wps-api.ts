@@ -20,6 +20,61 @@ export class WPSClient {
     this.apiUrl = apiUrl;
   }
 
+  /**
+   * 获取文件临时下载链接
+   * 根据WPS开放平台文档，使用storage_key获取文件的临时访问链接
+   */
+  async getDownloadUrl(storageKey: string): Promise<string> {
+    const accessToken = await oauthTokenManager.getAccessToken(
+      this.appId,
+      this.secretKey,
+      this.apiUrl
+    );
+
+    // 尝试使用标准的文件下载API
+    // 根据WPS开放平台常见接口设计，使用以下路径之一
+    const pathsToTry = [
+      `/v7/messages/files/download`, // 可能的路径1
+      `/v7/files/download`,           // 可能的路径2
+      `/v7/message/files/download`    // 可能的路径3
+    ];
+
+    const body = { storage_key: storageKey };
+
+    for (const path of pathsToTry) {
+      try {
+        const result = await this.sendV7Request("POST", path, body, accessToken);
+
+        // 成功响应格式可能为:
+        // { "code": 0, "data": { "download_url": "https://..." } }
+        // 或 { "errcode": 0, "data": { "url": "https://..." } }
+        if (result.code === 0 || result.errcode === 0) {
+          return result.data?.download_url || result.data?.url;
+        }
+      } catch (error) {
+        // 继续尝试下一个路径
+        continue;
+      }
+    }
+
+    throw new Error(`无法获取文件下载链接，请确认storage_key有效`);
+  }
+
+  /**
+   * 下载文件到Buffer
+   */
+  async downloadFile(storageKey: string): Promise<Buffer> {
+    const downloadUrl = await this.getDownloadUrl(storageKey);
+    const response = await fetch(downloadUrl);
+
+    if (!response.ok) {
+      throw new Error(`文件下载失败 ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
   async sendTextMessage(
     text: string,
     chatId: string

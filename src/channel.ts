@@ -279,6 +279,29 @@ export async function handleWpsMessage(params: {
     peer: { kind: isDirect ? "direct" : "group", id: isDirect ? parsed.senderId : parsed.chatId },
   });
 
+  // 创建WPS客户端（复用）
+  const client = new WPSClient(
+    config.appId!,
+    config.secretKey!,
+    config.apiUrl || "https://openapi.wps.cn"
+  );
+
+  // 6.5 解析 wps-storage 格式的媒体URL（如果有）
+  let resolvedMediaUrl: string | undefined = parsed.mediaUrls?.[0];
+  if (parsed.mediaUrls && parsed.mediaUrls.length > 0 && parsed.mediaUrls[0].startsWith("wps-storage:")) {
+    try {
+      const storageKey = parsed.mediaUrls[0].replace("wps-storage:", "");
+      // 调用新的API，需要 chatId 和 messageId
+      const downloadUrl = await client.getDownloadUrl(parsed.chatId, messageId!, storageKey);
+      resolvedMediaUrl = downloadUrl;
+
+      log?.debug?.(`[WPS] 已解析图片URL: ${resolvedMediaUrl}`);
+    } catch (err: any) {
+      log?.warn?.(`[WPS] 获取图片URL失败: ${err.message}`);
+      resolvedMediaUrl = undefined;
+    }
+  }
+
   const storePath = rt.channel.session.resolveStorePath(cfg.session?.store, {
     agentId: route.agentId,
   });
@@ -321,8 +344,8 @@ export async function handleWpsMessage(params: {
     Surface: "wps-xiezuo",
     MessageSid: messageId,
     Timestamp: event.send_time,
-    MediaPath: parsed.mediaUrls?.[0],
-    MediaUrl: parsed.mediaUrls?.[0],
+    MediaPath: resolvedMediaUrl,
+    MediaUrl: resolvedMediaUrl,
     GroupSystemPrompt: config.groupSystemPrompt,
     GroupChannel: isDirect ? undefined : route.sessionKey,
     CommandAuthorized: true,
@@ -343,12 +366,6 @@ export async function handleWpsMessage(params: {
   log?.info?.(`[WPS] 接收消息: from=${fromLabel} text="${parsed.text.slice(0, 50)}..."`);
 
   // 7. 发送"思考中"提示（如果启用）
-  const client = new WPSClient(
-    config.appId!,
-    config.secretKey!,
-    config.apiUrl || "https://openapi.wps.cn"
-  );
-
   if (config.showThinking !== false) {
     try {
       await client.sendTextMessage("🤔 思考中，请稍候...", parsed.chatId);

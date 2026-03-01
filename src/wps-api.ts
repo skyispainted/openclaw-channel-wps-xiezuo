@@ -168,13 +168,13 @@ export class WPSClient {
    *
    * @param text 消息内容
    * @param chatId 会话ID
-   * @param type 消息类型: "plain" | "markdown"
+   * @param type 消息类型: "plain" | "markdown"（默认为 "markdown"）
    * @returns 消息发送结果
    */
   async sendTextMessage(
     text: string,
     chatId: string,
-    type: "plain" | "markdown" = "plain"
+    type: "plain" | "markdown" = "markdown"
   ): Promise<WPSResponse> {
     if (!text || text.trim().length === 0) {
       throw new Error("消息内容不能为空");
@@ -529,49 +529,6 @@ export class WPSClient {
 
     if (result.code !== 0) {
       throw new Error(`发送视频消息失败: ${result.msg || "未知错误"}`);
-    }
-
-    return { result: result.code, msg: result.msg, message_id: result.data?.message_id };
-  }
-
-  async sendTextMessage(
-    text: string,
-    chatId: string
-  ): Promise<WPSResponse> {
-    // 参数验证
-    if (!text || text.trim().length === 0) {
-      throw new Error("消息内容不能为空");
-    }
-
-    if (!chatId) {
-      throw new Error("chatId 不能为空");
-    }
-
-    const accessToken = await oauthTokenManager.getAccessToken(
-      this.appId,
-      this.secretKey,
-      this.apiUrl
-    );
-
-    const message = {
-      type: "text",
-      receiver: {
-        receiver_id: chatId,
-        type: "chat"
-      },
-      content: {
-        text: {
-          content: text.trim(),
-          type: "plain"
-        }
-      }
-    };
-
-    const path = `/v7/messages/create`;
-    const result = await this.sendV7Request("POST", path, message, accessToken);
-
-    if (result.code !== 0) {
-      throw new Error(`发送消息失败: ${result.msg || "未知错误"}`);
     }
 
     return { result: result.code, msg: result.msg, message_id: result.data?.message_id };

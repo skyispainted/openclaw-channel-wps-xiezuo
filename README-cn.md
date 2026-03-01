@@ -287,9 +287,9 @@ const payload = {
 ### 完整示例
 
 ```typescript
-// 纯文本
+// 纯文本（Markdown 格式）
 {
-  text: "这是一条文本消息"
+  text: "这是一条**Markdown**格式的文本消息"
 }
 
 // 图片消息
@@ -313,10 +313,28 @@ const payload = {
 }
 ```
 
+### Markdown 支持
+
+所有纯文本消息默认使用 **Markdown 格式**，支持以下语法：
+
+- **粗体**: `**粗体文本**`
+- *斜体*: `*斜体文本*`
+- 链接: `[文本](https://example.com)`
+- 列表: `- 项目1`
+- 标题: `# 一级标题`
+
+**示例：**
+```typescript
+{
+  text: "# 欢迎使用\n\n- **功能1**: 支持Markdown\n- **功能2**: 自动识别媒体"
+}
+```
+
 ### 注意事项
 
 - `mediaUrl` 和 `mediaUrls` 通常包含 `wps-storage:storage_key` 格式的存储键
 - 系统会自动将 storage_key 转换为临时访问链接（接收消息时）
 - 发送消息时，storage_key 需要是有效的
 - 如果发送失败，系统会自动降级为文本消息
+- **所有文本消息默认使用 Markdown 格式**
 

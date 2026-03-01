@@ -229,6 +229,14 @@ export function decryptEventData(
     // IV 向量取 nonce 的前 16 字节
     const ivBuffer = Buffer.from(nonce, "utf8").slice(0, 16);
 
+    console.log("[DEBUG] 解密参数:");
+    console.log(`  密钥 (hex): ${cipherHex}`);
+    console.log(`  密钥长度: ${keyBuffer.length} bytes`);
+    console.log(`  IV (hex): ${ivBuffer.toString("hex")}`);
+    console.log(`  加密数据长度: ${encryptedBuffer.length} bytes`);
+    console.log(`  Nonce: ${nonce}`);
+    console.log(`  Nonce (hex): ${Buffer.from(nonce, "utf8").toString("hex")}`);
+
     // AES-128-CBC 解密 (MD5 产生 16 字节密钥)
     const decipher = createDecipheriv("aes-128-cbc", keyBuffer, ivBuffer);
     decipher.setAutoPadding(true);
@@ -238,6 +246,7 @@ export function decryptEventData(
       decipher.final()
     ]);
 
+    console.log(`[DEBUG] 解密成功，数据长度: ${decrypted.length} bytes`);
     return decrypted.toString("utf8");
   } catch (error) {
     throw new Error(`解密失败: ${error instanceof Error ? error.message : String(error)}`);

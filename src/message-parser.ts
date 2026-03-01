@@ -44,6 +44,8 @@ export interface ParsedMessage {
   messageId: string;
   companyId: string;
   isAtBot?: boolean;
+  messageType: string; // 消息类型: text, image, file, rich_text, card, audio, video
+  messageData?: any; // 原始消息数据
 }
 
 /**
@@ -64,6 +66,8 @@ export function parseWPSMessage(event: WPSEvent): ParsedMessage {
     senderId: event.sender.id,
     messageId: message.id,
     companyId: event.company_id,
+    messageType: message.type,
+    messageData: message.content,
   };
 
   // 检查是否@了机器人
@@ -97,6 +101,30 @@ export function parseWPSMessage(event: WPSEvent): ParsedMessage {
       const richTextInfo = parseRichTextMessage(message.content);
       result.text = richTextInfo.text;
       result.mediaUrls.push(...richTextInfo.mediaUrls);
+      break;
+
+    case "audio":
+      result.text = "[音频]";
+      const audioUrl = parseAudioMessage(message.content);
+      if (audioUrl) {
+        result.mediaUrls.push(audioUrl);
+      }
+      break;
+
+    case "video":
+      result.text = "[视频]";
+      const videoUrl = parseVideoMessage(message.content);
+      if (videoUrl) {
+        result.mediaUrls.push(videoUrl);
+      }
+      break;
+
+    case "sticker":
+      result.text = "[表情包]";
+      const stickerUrl = parseStickerMessage(message.content);
+      if (stickerUrl) {
+        result.mediaUrls.push(stickerUrl);
+      }
       break;
 
     default:
@@ -185,6 +213,36 @@ function parseRichTextMessage(content: any): { text: string; mediaUrls: string[]
     text: parts.join(" "),
     mediaUrls,
   };
+}
+
+/**
+ * 解析音频消息
+ */
+function parseAudioMessage(content: any): string {
+  if (content?.audio?.storage_key) {
+    return `wps-storage:${content.audio.storage_key}`;
+  }
+  return "";
+}
+
+/**
+ * 解析视频消息
+ */
+function parseVideoMessage(content: any): string {
+  if (content?.video?.storage_key) {
+    return `wps-storage:${content.video.storage_key}`;
+  }
+  return "";
+}
+
+/**
+ * 解析表情包消息
+ */
+function parseStickerMessage(content: any): string {
+  if (content?.sticker?.image?.storage_key) {
+    return `wps-storage:${content.sticker.image.storage_key}`;
+  }
+  return "";
 }
 
 /**

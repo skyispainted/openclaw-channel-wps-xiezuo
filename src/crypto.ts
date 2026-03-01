@@ -217,20 +217,20 @@ export function decryptEventData(
     // Base64 解码
     const encryptedBuffer = Buffer.from(encryptedData, "base64");
 
-    // 使用 MD5(secretKey) 作为密钥 - 修复：使用 hex 编码而不是 utf8
+    // 使用 MD5(secretKey) 作为密钥 - MD5 产生 16 字节 (128位) 密钥
     const cipherHex = md5Hex(secretKey);
     const keyBuffer = Buffer.from(cipherHex, "hex");
 
-    // 检查密钥长度
-    if (keyBuffer.length !== 32) {
-      throw new Error(`密钥长度错误: ${keyBuffer.length} (期望: 32)`);
+    // 检查密钥长度 - MD5 是 16 字节
+    if (keyBuffer.length !== 16) {
+      throw new Error(`密钥长度错误: ${keyBuffer.length} (期望: 16)`);
     }
 
     // IV 向量取 nonce 的前 16 字节
     const ivBuffer = Buffer.from(nonce, "utf8").slice(0, 16);
 
-    // AES-256-CBC 解密
-    const decipher = createDecipheriv("aes-256-cbc", keyBuffer, ivBuffer);
+    // AES-128-CBC 解密 (MD5 产生 16 字节密钥)
+    const decipher = createDecipheriv("aes-128-cbc", keyBuffer, ivBuffer);
     decipher.setAutoPadding(true);
 
     const decrypted = Buffer.concat([

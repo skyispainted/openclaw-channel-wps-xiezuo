@@ -14,7 +14,7 @@
     "plugin"
   ],
   "homepage": "https://github.com/skyispainted/openclaw-channel-wps-xiezuo",
-  "license": "MIT",
+  "license": "GPL-3.0",
   "author": "skyispainted",
   "repository": {
     "type": "git",

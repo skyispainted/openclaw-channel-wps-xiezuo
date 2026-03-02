@@ -159,11 +159,23 @@ export class WPSClient {
     return Buffer.from(arrayBuffer);
   }
 
+  /**
+   * ==================== 消息发送功能 ====================
+   */
+
+  /**
+   * 发送文本消息
+   *
+   * @param text 消息内容
+   * @param chatId 会话ID
+   * @param type 消息类型: "plain" | "markdown"（默认为 "markdown"）
+   * @returns 消息发送结果
+   */
   async sendTextMessage(
     text: string,
-    chatId: string
+    chatId: string,
+    type: "plain" | "markdown" = "markdown"
   ): Promise<WPSResponse> {
-    // 参数验证
     if (!text || text.trim().length === 0) {
       throw new Error("消息内容不能为空");
     }
@@ -182,14 +194,14 @@ export class WPSClient {
       type: "text",
       receiver: {
         receiver_id: chatId,
-        type: "chat"
+        type: "chat",
       },
       content: {
         text: {
           content: text.trim(),
-          type: "plain"
-        }
-      }
+          type: type,
+        },
+      },
     };
 
     const path = `/v7/messages/create`;
@@ -197,6 +209,326 @@ export class WPSClient {
 
     if (result.code !== 0) {
       throw new Error(`发送消息失败: ${result.msg || "未知错误"}`);
+    }
+
+    return { result: result.code, msg: result.msg, message_id: result.data?.message_id };
+  }
+
+  /**
+   * 发送富文本消息
+   *
+   * @param elements 富文本元素数组
+   * @param chatId 会话ID
+   * @returns 消息发送结果
+   */
+  async sendRichTextMessage(
+    elements: RichTextElement[],
+    chatId: string
+  ): Promise<WPSResponse> {
+    if (!elements || elements.length === 0) {
+      throw new Error("富文本内容不能为空");
+    }
+
+    if (!chatId) {
+      throw new Error("chatId 不能为空");
+    }
+
+    const accessToken = await oauthTokenManager.getAccessToken(
+      this.appId,
+      this.secretKey,
+      this.apiUrl
+    );
+
+    const message = {
+      type: "rich_text",
+      receiver: {
+        receiver_id: chatId,
+        type: "chat",
+      },
+      content: {
+        rich_text: {
+          elements: elements,
+        },
+      },
+    };
+
+    const path = `/v7/messages/create`;
+    const result = await this.sendV7Request("POST", path, message, accessToken);
+
+    if (result.code !== 0) {
+      throw new Error(`发送富文本消息失败: ${result.msg || "未知错误"}`);
+    }
+
+    return { result: result.code, msg: result.msg, message_id: result.data?.message_id };
+  }
+
+  /**
+   * 发送图片消息
+   *
+   * @param storageKey 图片存储key
+   * @param chatId 会话ID
+   * @param options 可选参数
+   * @returns 消息发送结果
+   */
+  async sendImageMessage(
+    storageKey: string,
+    chatId: string,
+    options?: {
+      type?: "image/png" | "image/jpg" | "image/gif" | "image/webp";
+      name?: string;
+      size?: number;
+      width?: number;
+      height?: number;
+      thumbnailStorageKey?: string;
+      thumbnailType?: "image/png" | "image/jpg" | "image/gif" | "image/webp";
+    }
+  ): Promise<WPSResponse> {
+    if (!storageKey) {
+      throw new Error("storageKey 不能为空");
+    }
+
+    if (!chatId) {
+      throw new Error("chatId 不能为空");
+    }
+
+    const accessToken = await oauthTokenManager.getAccessToken(
+      this.appId,
+      this.secretKey,
+      this.apiUrl
+    );
+
+    const imageContent: any = {
+      storage_key: storageKey,
+      type: options?.type || "image/jpeg",
+      name: options?.name,
+      size: options?.size,
+      width: options?.width,
+      height: options?.height,
+    };
+
+    if (options?.thumbnailStorageKey) {
+      imageContent.thumbnail_storage_key = options.thumbnailStorageKey;
+      imageContent.thumbnail_type = options.thumbnailType || options.type || "image/jpeg";
+    }
+
+    const message = {
+      type: "image",
+      receiver: {
+        receiver_id: chatId,
+        type: "chat",
+      },
+      content: {
+        image: imageContent,
+      },
+    };
+
+    const path = `/v7/messages/create`;
+    const result = await this.sendV7Request("POST", path, message, accessToken);
+
+    if (result.code !== 0) {
+      throw new Error(`发送图片消息失败: ${result.msg || "未知错误"}`);
+    }
+
+    return { result: result.code, msg: result.msg, message_id: result.data?.message_id };
+  }
+
+  /**
+   * 发送文件消息（本地文件）
+   *
+   * @param storageKey 文件存储key
+   * @param chatId 会话ID
+   * @param name 文件名称
+   * @param size 文件大小（可选）
+   * @returns 消息发送结果
+   */
+  async sendFileMessage(
+    storageKey: string,
+    chatId: string,
+    name: string,
+    size?: number
+  ): Promise<WPSResponse> {
+    if (!storageKey) {
+      throw new Error("storageKey 不能为空");
+    }
+
+    if (!chatId) {
+      throw new Error("chatId 不能为空");
+    }
+
+    if (!name) {
+      throw new Error("文件名称不能为空");
+    }
+
+    const accessToken = await oauthTokenManager.getAccessToken(
+      this.appId,
+      this.secretKey,
+      this.apiUrl
+    );
+
+    const message = {
+      type: "file",
+      receiver: {
+        receiver_id: chatId,
+        type: "chat",
+      },
+      content: {
+        file: {
+          type: "local",
+          local: {
+            storage_key: storageKey,
+            name: name,
+            size: size,
+          },
+        },
+      },
+    };
+
+    const path = `/v7/messages/create`;
+    const result = await this.sendV7Request("POST", path, message, accessToken);
+
+    if (result.code !== 0) {
+      throw new Error(`发送文件消息失败: ${result.msg || "未知错误"}`);
+    }
+
+    return { result: result.code, msg: result.msg, message_id: result.data?.message_id };
+  }
+
+  /**
+   * 发送音频消息
+   *
+   * @param storageKey 音频存储key
+   * @param chatId 会话ID
+   * @param options 音频信息
+   * @returns 消息发送结果
+   */
+  async sendAudioMessage(
+    storageKey: string,
+    chatId: string,
+    options: {
+      duration: number;
+      format?: "wav" | "amr";
+      codec?: "amr";
+      sampleRate?: number;
+      sampleBits?: number;
+      channels?: number;
+      size?: number;
+    }
+  ): Promise<WPSResponse> {
+    if (!storageKey) {
+      throw new Error("storageKey 不能为空");
+    }
+
+    if (!chatId) {
+      throw new Error("chatId 不能为空");
+    }
+
+    const accessToken = await oauthTokenManager.getAccessToken(
+      this.appId,
+      this.secretKey,
+      this.apiUrl
+    );
+
+    const audioContent = {
+      storage_key: storageKey,
+      media: {
+        duration: options.duration,
+        format: options.format || "wav",
+        codec: options.codec,
+        sample_rate: options.sampleRate,
+        sample_bits: options.sampleBits,
+        channels: options.channels,
+        size: options.size,
+      },
+    };
+
+    const message = {
+      type: "audio",
+      receiver: {
+        receiver_id: chatId,
+        type: "chat",
+      },
+      content: {
+        audio: audioContent,
+      },
+    };
+
+    const path = `/v7/messages/create`;
+    const result = await this.sendV7Request("POST", path, message, accessToken);
+
+    if (result.code !== 0) {
+      throw new Error(`发送音频消息失败: ${result.msg || "未知错误"}`);
+    }
+
+    return { result: result.code, msg: result.msg, message_id: result.data?.message_id };
+  }
+
+  /**
+   * 发送视频消息
+   *
+   * @param storageKey 视频存储key
+   * @param chatId 会话ID
+   * @param options 视频信息
+   * @returns 消息发送结果
+   */
+  async sendVideoMessage(
+    storageKey: string,
+    chatId: string,
+    options: {
+      duration: number;
+      format?: "mp4";
+      codec?: "h.264";
+      width?: number;
+      height?: number;
+      size?: number;
+      coverStorageKey?: string;
+    }
+  ): Promise<WPSResponse> {
+    if (!storageKey) {
+      throw new Error("storageKey 不能为空");
+    }
+
+    if (!chatId) {
+      throw new Error("chatId 不能为空");
+    }
+
+    const accessToken = await oauthTokenManager.getAccessToken(
+      this.appId,
+      this.secretKey,
+      this.apiUrl
+    );
+
+    const videoContent: any = {
+      storage_key: storageKey,
+      media: {
+        duration: options.duration,
+        format: options.format || "mp4",
+        codec: options.codec || "h.264",
+        width: options.width,
+        height: options.height,
+        size: options.size,
+      },
+    };
+
+    if (options.coverStorageKey) {
+      videoContent.media.cover_storage_key = options.coverStorageKey;
+    }
+
+    const message = {
+      type: "video",
+      receiver: {
+        receiver_id: chatId,
+        type: "chat",
+      },
+      content: {
+        video: videoContent,
+      },
+    };
+
+    const path = `/v7/messages/create`;
+    const result = await this.sendV7Request("POST", path, message, accessToken);
+
+    if (result.code !== 0) {
+      throw new Error(`发送视频消息失败: ${result.msg || "未知错误"}`);
     }
 
     return { result: result.code, msg: result.msg, message_id: result.data?.message_id };
@@ -217,4 +549,258 @@ export class WPSClient {
       throw new Error(`连接测试失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+}
+
+/**
+ * ==================== 富文本消息类型定义 ====================
+ */
+
+/**
+ * 富文本元素基础类型
+ */
+export interface RichTextElement {
+  type: string;
+  alt_text: string;
+  indent: number;
+  index: number;
+  elements?: RichTextElement[];
+  text_content?: {
+    content: string;
+    type?: "plain" | "markdown";
+  };
+  style_text_content?: {
+    style: {
+      bold?: boolean;
+      color?: string;
+      italic?: boolean;
+    };
+    text: string;
+  };
+  mention_content?: {
+    identity?: {
+      avatar?: string;
+      company_id?: string;
+      id: string;
+      name: string;
+      type: "user" | "sp";
+    };
+    text: string;
+    type?: string;
+  };
+  image_content?: {
+    size?: number;
+    height?: number;
+    width?: number;
+    name?: string;
+    type?: "image/png" | "image/jpg" | "image/gif" | "image/webp";
+    storage_key: string;
+    thumbnail_type?: "image/png" | "image/jpg" | "image/gif" | "image/webp";
+    thumbnail_storage_key?: string;
+  };
+  link_content?: {
+    text: string;
+    url: string;
+  };
+  doc_content?: {
+    text: string;
+    file: {
+      id: string;
+      link_url: string;
+      link_id: string;
+    };
+  };
+}
+
+/**
+ * 创建纯文本元素
+ */
+export function createTextElement(
+  content: string,
+  index: number,
+  type: "plain" | "markdown" = "plain"
+): RichTextElement {
+  return {
+    type: "text",
+    alt_text: content,
+    indent: 0,
+    index: index,
+    elements: [
+      {
+        type: "text",
+        alt_text: content,
+        indent: 0,
+        index: 0,
+        text_content: {
+          content: content,
+          type: type,
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * 创建有样式的文本元素
+ */
+export function createStyledTextElement(
+  text: string,
+  index: number,
+  style?: { bold?: boolean; color?: string; italic?: boolean }
+): RichTextElement {
+  return {
+    type: "text",
+    alt_text: text,
+    indent: 0,
+    index: index,
+    elements: [
+      {
+        type: "text",
+        alt_text: text,
+        indent: 0,
+        index: 0,
+        style_text_content: {
+          style: style || {},
+          text: text,
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * 创建@人元素
+ */
+export function createMentionElement(
+  userId: string,
+  userName: string,
+  index: number,
+  companyId?: string
+): RichTextElement {
+  return {
+    type: "mention",
+    alt_text: `@${userName}`,
+    indent: 0,
+    index: index,
+    elements: [
+      {
+        type: "mention",
+        alt_text: `@${userName}`,
+        indent: 0,
+        index: 0,
+        mention_content: {
+          identity: {
+            id: userId,
+            name: userName,
+            type: "user",
+            company_id: companyId,
+          },
+          text: `@${userName}`,
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * 创建图片元素
+ */
+export function createImageElement(
+  storageKey: string,
+  index: number,
+  options?: {
+    name?: string;
+    type?: "image/png" | "image/jpg" | "image/gif" | "image/webp";
+    size?: number;
+    width?: number;
+    height?: number;
+    thumbnailStorageKey?: string;
+    thumbnailType?: "image/png" | "image/jpg" | "image/gif" | "image/webp";
+  }
+): RichTextElement {
+  return {
+    type: "image",
+    alt_text: "[图片]",
+    indent: 0,
+    index: index,
+    elements: [
+      {
+        type: "image",
+        alt_text: "[图片]",
+        indent: 0,
+        index: 0,
+        image_content: {
+          storage_key: storageKey,
+          name: options?.name,
+          type: options?.type || "image/jpeg",
+          size: options?.size,
+          width: options?.width,
+          height: options?.height,
+          thumbnail_storage_key: options?.thumbnailStorageKey,
+          thumbnail_type: options?.thumbnailType || options?.type || "image/jpeg",
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * 创建链接元素
+ */
+export function createLinkElement(
+  text: string,
+  url: string,
+  index: number
+): RichTextElement {
+  return {
+    type: "link",
+    alt_text: text,
+    indent: 0,
+    index: index,
+    elements: [
+      {
+        type: "link",
+        alt_text: text,
+        indent: 0,
+        index: 0,
+        link_content: {
+          text: text,
+          url: url,
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * 创建内嵌文档元素
+ */
+export function createDocElement(
+  text: string,
+  fileId: string,
+  linkUrl: string,
+  linkId: string,
+  index: number
+): RichTextElement {
+  return {
+    type: "doc",
+    alt_text: text,
+    indent: 0,
+    index: index,
+    elements: [
+      {
+        type: "doc",
+        alt_text: text,
+        indent: 0,
+        index: 0,
+        doc_content: {
+          text: text,
+          file: {
+            id: fileId,
+            link_url: linkUrl,
+            link_id: linkId,
+          },
+        },
+      },
+    ],
+  };
 }

@@ -382,10 +382,100 @@ export async function handleWpsMessage(params: {
       responsePrefix: "",
       deliver: async (payload) => {
         try {
-          const text = payload.text;
-          if (!text) return;
+          // 智能消息类型判断
+          // 优先级：channelData.messageType > mediaUrls > text
 
-          await client.sendTextMessage(text, parsed.chatId);
+          // 1. 检查 channelData.messageType（Agent 可以通过这个字段精确控制）
+          const messageType = payload.channelData?.messageType as string;
+
+          if (messageType === "image" && payload.mediaUrl) {
+            // 发送图片消息
+            await client.sendImageMessage(payload.mediaUrl, parsed.chatId);
+            return;
+          } else if (messageType === "file" && payload.mediaUrl) {
+            // 发送文件消息
+            const fileName = extractFileNameFromUrl(payload.mediaUrl);
+            await client.sendFileMessage(payload.mediaUrl, parsed.chatId, fileName);
+            return;
+          } else if (messageType === "rich_text" && payload.text) {
+            // 发送富文本消息
+            const elements = parseTextToRichTextElements(payload.text);
+            await client.sendRichTextMessage(elements, parsed.chatId);
+            return;
+          }
+
+          // 2. 检查 mediaUrls（Agent 提供的媒体URL列表）
+          if (payload.mediaUrls && payload.mediaUrls.length > 0) {
+            if (payload.mediaUrls.length === 1) {
+              // 单个媒体，尝试发送为图片消息
+              try {
+                await client.sendImageMessage(payload.mediaUrls[0], parsed.chatId);
+              } catch (err) {
+                // 降级为文本消息
+                log?.debug?.(`[WPS] 图片消息发送失败，降级为文本: ${payload.mediaUrls[0]}`);
+                await client.sendTextMessage(payload.text || payload.mediaUrls[0], parsed.chatId);
+              }
+            } else {
+              // 多个媒体，使用富文本消息
+              const elements = payload.mediaUrls.map((url, i) => {
+                return {
+                  type: "image",
+                  alt_text: `[图片${i + 1}]`,
+                  indent: 0,
+                  index: i,
+                  elements: [{
+                    type: "image",
+                    alt_text: `[图片${i + 1}]`,
+                    indent: 0,
+                    index: 0,
+                    image_content: {
+                      storage_key: url,
+                    },
+                  }],
+                };
+              });
+
+              // 添加文本（如果有）
+              if (payload.text) {
+                elements.push({
+                  type: "text",
+                  alt_text: payload.text,
+                  indent: 0,
+                  index: payload.mediaUrls.length,
+                  elements: [{
+                    type: "text",
+                    alt_text: payload.text,
+                    indent: 0,
+                    index: 0,
+                    text_content: {
+                      content: payload.text,
+                      type: "plain",
+                    },
+                  }],
+                });
+              }
+
+              await client.sendRichTextMessage(elements, parsed.chatId);
+            }
+            return;
+          }
+
+          // 3. 检查 mediaUrl（单个媒体URL）
+          if (payload.mediaUrl) {
+            try {
+              await client.sendImageMessage(payload.mediaUrl, parsed.chatId);
+            } catch (err) {
+              // 降级为文本消息
+              log?.debug?.(`[WPS] 单图片消息发送失败，降级为文本: ${payload.mediaUrl}`);
+              await client.sendTextMessage(payload.text || payload.mediaUrl, parsed.chatId);
+            }
+            return;
+          }
+
+          // 4. 默认发送文本消息
+          if (payload.text) {
+            await client.sendTextMessage(payload.text, parsed.chatId);
+          }
         } catch (err: any) {
           log?.error?.(`[WPS] 回复失败: ${err.message}`);
           throw err;
@@ -397,5 +487,54 @@ export async function handleWpsMessage(params: {
 }
 
 export const wpsXiezuoPlugin = simpleXiezuoPlugin;
+
+/**
+ * 从URL中提取文件名
+ */
+function extractFileNameFromUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname;
+    const parts = path.split("/");
+    const fileName = parts[parts.length - 1];
+    return fileName.split("?")[0] || "文件";
+  } catch {
+    return url.substring(url.lastIndexOf("/") + 1) || "文件";
+  }
+}
+
+/**
+ * 解析文本为富文本元素（简单实现）
+ */
+function parseTextToRichTextElements(text: string): Array<{
+  type: string;
+  alt_text: string;
+  indent: number;
+  index: number;
+  elements: Array<{
+    type: string;
+    alt_text: string;
+    indent: number;
+    index: number;
+    text_content: { content: string; type: string };
+  }>;
+}> {
+  return [{
+    type: "text",
+    alt_text: text,
+    indent: 0,
+    index: 0,
+    elements: [{
+      type: "text",
+      alt_text: text,
+      indent: 0,
+      index: 0,
+      text_content: {
+        content: text,
+        type: "plain",
+      },
+    }],
+  }];
+}
 
 export { detectMediaTypeFromExtension } from "./media-utils.js";

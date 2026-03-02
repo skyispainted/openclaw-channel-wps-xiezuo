@@ -1,7 +1,7 @@
 {
   "name": "@skyispainted/wps-xiezuo",
-  "version": "2026.03.02",
-  "description": "WPS协作（WPS365）聊天机器人插件，支持 OpenClaw",
+  "version": "2026.03.03",
+  "description": "OpenClaw Channel Plugin for WPS Xiezuo (WPS365)  适用于WPS协作（WPS365）的OpenClaw Channel插件",
   "keywords": [
     "bot",
     "channel",

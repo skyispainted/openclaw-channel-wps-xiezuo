@@ -39,8 +39,6 @@ This project is a refactored adaptation of the [`simple-xiezuo`](https://github.
 
 ### Method A: Via npm (Recommended for users)
 
-*Note: This package is pending official registry publication.*
-
 ```bash
 openclaw plugins install @skyispainted/wps-xiezuo
 ```

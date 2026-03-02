@@ -3,13 +3,12 @@
 <div align="center">
 
 > [!WARNING]
-> **Experimental Version / 开发测试版**
+> **开发测试版 / Alpha 阶段**
+>
 > 本插件目前处于 **开发/测试 (Alpha)** 阶段。
-> * ⚠️ **稳定性：** 核心逻辑（签名验证、消息解密等）尚未完成完整的全链路集成测试。
-> * ⚠️ **生产环境：** 暂不建议在正式生产环境或重要业务场景中使用。
-> * 🛠   **贡献：** 如果你在使用中遇到 Bug 或测试成功，欢迎提交 [Issue](https://github.com/skyispainted/openclaw-channel-wps-xiezuo/issues)。
-> 
-> 
+> - ⚠️ **稳定性：** 核心逻辑（签名验证、消息解密等）尚未完成完整的全链路集成测试。
+> - ⚠️ **生产环境：** 暂不建议在正式生产环境或重要业务场景中使用。
+> - 🛠️ **贡献：** 如果你在使用中遇到 Bug 或测试成功，欢迎提交 [Issue](https://github.com/skyispainted/openclaw-channel-wps-xiezuo/issues)。
 
 ---
 
@@ -25,7 +24,7 @@
 
 ## 致谢
 
-本项目基于 [@xieqiwen](https://github.com/xieqiwen) 的 [`simple-xiezuo`](https://www.google.com/search?q=%5Bhttps://github.com/xieqiwen/simple-xiezuo%5D(https://github.com/xieqiwen/simple-xiezuo)) 项目进行重构与适配。感谢其提供的基础框架支持。
+本项目基于 [@xieqiwen](https://github.com/xieqiwen) 的 [`simple-xiezuo`](https://github.com/xieqiwen/simple-xiezuo) 项目进行重构与适配。感谢其提供的基础框架支持。
 
 ## 功能特性
 
@@ -33,6 +32,8 @@
 * ✅ **支持私聊 (DM)** — 与机器人进行 1 对 1 直接交互。
 * ✅ **支持群聊** — 在群组频道中通过 @机器人进行交互。
 * ✅ **OpenClaw 管道集成** — 完全兼容 OpenClaw AI 消息处理引擎。
+* ✅ **媒体消息支持** — 自动解析和转换 WPS-storage 媒体存储键。
+* ✅ **灵活的消息类型** — Agent 可控制消息类型选择（文本、图片、文件、富文本）。
 
 ## 安装指南
 
@@ -130,7 +131,7 @@ openclaw configure --section channels
 2. **App ID:** 输入你的 WPS AppId。
 3. **Secret Key:** 输入你的 WPS SecretKey。
 4. **Encrypt Key:** 输入你的 WPS EncryptKey。
-5. **API URL:** 默认值为 `https://openapi.wps.cn/v7/`。
+5. **API URL:** 默认值为 `https://openapi.wps.cn`。
 6. **回调 URL:** 你的公网 Webhook 接收地址。
 7. **策略设置:** 配置私聊和群聊策略（`open` 或 `allowlist`）。
 
@@ -158,7 +159,7 @@ openclaw configure --section channels
       "appId": "your-app-id",
       "secretKey": "your-secret-key",
       "encryptKey": "your-encrypt-key",
-      "apiUrl": "https://openapi.wps.cn/v7/",
+      "apiUrl": "https://openapi.wps.cn",
       "dmPolicy": "open",
       "groupPolicy": "open",
       "debug": false
@@ -175,7 +176,7 @@ openclaw configure --section channels
 | `appId` | string | **必填** | WPS 应用的 AppId。 |
 | `secretKey` | string | **必填** | WPS 应用的 SecretKey。 |
 | `encryptKey` | string | **必填** | 用于消息解密的 AES 密钥。 |
-| `apiUrl` | string | `https://openapi.wps.cn/v7/` | WPS OpenAPI 端点地址。 |
+| `apiUrl` | string | `https://openapi.wps.cn` | WPS OpenAPI 端点地址。 |
 | `dmPolicy` | string | `"open"` | 私聊策略：`open` 或 `allowlist`。 |
 | `groupPolicy` | string | `"open"` | 群聊策略：`open` 或 `allowlist`。 |
 | `allowFrom` | string[] | `[]` | 已授权的用户 ID 列表（用于 `allowlist` 模式）。 |
@@ -193,16 +194,6 @@ openclaw configure --section channels
 * `open`: 机器人在被添加进的任何群组中都会响应 @mention。
 * `allowlist`: 机器人仅在特定的授权群组中响应。
 
-## 故障排除
-
-* **无响应:** 请确认应用已在 WPS 控制台”发布”，且服务器端口已对公网开放。
-* **解密错误:** 确保 `encryptKey` 与 WPS 控制台完全一致（通常为 16, 24 或 32 字节）。
-* **认证失败:** 检查 `appId` 或 `secretKey` 是否被重置，或应用是否已被禁用。
-* **图片/文件无法解析:** 系统会自动将 `wps-storage:storage_key` 转换为临时访问链接。如果解析失败，请检查：
-  * 文件是否存在（storage_key 是否有效）
-  * API 调用是否有权限
-  * 日志中是否有 `[WPS] 获取图片URL失败` 的警告信息
-* **查看日志:** 运行 `openclaw logs | grep wps-xiezuo` 进行实时调试。
 
 ---
 
@@ -338,3 +329,19 @@ const payload = {
 - 如果发送失败，系统会自动降级为文本消息
 - **所有文本消息默认使用 Markdown 格式**
 
+---
+
+## TODO 清单
+
+以下功能计划在后续版本中实现：
+
+### 高优先级
+- [ ] **卡片交互支持** - 实现 WPS 互动卡片回调（目前在 `gateway.ts:371-372` 处为占位实现）
+- [ ] **群成员管理** - 完整实现群成员列表和管理功能
+- [ ] **端到端集成测试** - 完成签名验证和消息解密流程的完整测试
+
+### 中优先级
+- [ ] **增强错误处理** - 改进媒体 URL 获取失败时的错误信息和恢复机制
+- [ ] **批量消息发送** - 支持在单个 API 调用中发送多条消息
+- [ ] **富文本解析器** - 更好地解析包含多个元素的复杂富文本消息
+- [ ] **消息编辑历史** - 跟踪和显示消息编辑历史用于审计

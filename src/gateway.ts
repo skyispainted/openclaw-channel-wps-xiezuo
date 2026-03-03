@@ -87,8 +87,8 @@ export async function startSimpleXiezuoAccount(ctx: ChannelGatewayContext<any>):
 
   ctx.log?.info?.(`[${accountId}] WPS协作Gateway启动`);
 
-  // 固定的回调路径
-  const callbackPath = "/wps-xiezuo/webhook";
+  // 使用配置的 webhook 路径（可自定义）
+  const callbackPath = config.webhookPath || "/wps-xiezuo/webhook";
 
   // 自动构建 webhook 地址（从 OpenClaw 运行时获取）
   const gatewayHost = ctx.cfg?.gateway?.customBindHost || "localhost";

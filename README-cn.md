@@ -39,8 +39,6 @@
 
 ### 方法 A：通过 npm 安装（推荐用户使用）
 
-*注意：本仓库正准备发布至官方 registry。*
-
 ```bash
 openclaw plugins install @skyispainted/wps-xiezuo
 ```

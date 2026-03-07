@@ -109,6 +109,33 @@ git pull
 openclaw gateway restart
 ```
 
+## 故障排除
+
+### Outbound not configured for channel
+
+如果您遇到 "Outbound not configured for channel: wps-xiezuo" 错误，这表示出站消息功能未正确配置。通常发生在以下情况：
+
+1. **缺少必需的凭据**：配置缺少诸如 `appId`、`secretKey` 或 `companyId` 等必需参数
+2. **配置不完整**：部分参数已填写但并非所有必需字段都已填满
+
+解决方法：
+
+1. **验证完整配置**：确保您的配置包含所有必需参数：
+   - `appId`：您的WPS应用程序ID
+   - `secretKey`：您的WPS应用程序密钥
+   - `encryptKey`：回调验证的加密密钥
+   - `companyId`：您的公司ID（如果没有提供，现在会自动获取）
+
+2. **使用自动配置**：我们的自动配置工具可以帮助使用WPS API自动获取 `companyId`：
+   ```bash
+   npm run auto-config
+   ```
+
+3. **手动验证**：您可以手动验证API连接：
+   ```bash
+   openclaw plugins probe wps-xiezuo
+   ```
+
 ## 自动配置
 
 本插件包含一个自动配置脚本，可以帮助您自动获取公司 ID。
@@ -117,10 +144,10 @@ openclaw gateway restart
 
 ```bash
 # 如果您已将 WPS 应用凭据设置为环境变量
-WPS_APP_ID="your_app_id" WPS_SECRET_KEY="your_secret_key" WPS_ENCRYPT_KEY="your_encrypt_key" node auto-config.mjs
+WPS_APP_ID="your_app_id" WPS_SECRET_KEY="your_secret_key" WPS_ENCRYPT_KEY="your_encrypt_key" npm run auto-config
 
 # 或运行脚本并在提示时输入凭据
-node auto-config.mjs
+npm run auto-config
 ```
 
 脚本将：

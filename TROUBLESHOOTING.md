@@ -4,6 +4,19 @@
 
 您遇到的错误 "Outbound not configured for channel: wps-xiezuo" 表明WPS协作通道的出站消息功能未正确配置。这通常是由于缺少必要的API凭据或配置信息。
 
+### 可能的原因
+
+1. **缺少必需的API凭据**：
+   - `appId`（WPS应用ID）未配置
+   - `secretKey`（WPS应用密钥）未配置
+   - `companyId`（公司ID）未配置
+
+2. **配置不完整**：
+   - 虽然提供了部分凭据，但并非所有必需字段都已填写
+
+3. **权限不足**：
+   - WPS应用没有向目标群聊发送消息的权限
+
 ## 解决步骤
 
 ### 1. 获取WPS应用凭据
@@ -16,19 +29,19 @@
 
 ### 2. 使用自动配置脚本（推荐）
 
-我们提供了一个自动配置脚本，可以帮您获取`companyId`并生成完整配置：
+我们提供了一个自动配置脚本，可以帮您获取`companyId`并验证完整配置：
 
 ```bash
-# 设置环境变量
-WPS_APP_ID="your_app_id" WPS_SECRET_KEY="your_secret_key" WPS_ENCRYPT_KEY="your_encrypt_key" node auto-config.mjs
+# 设置环境变量后运行
+WPS_APP_ID="your_app_id" WPS_SECRET_KEY="your_secret_key" WPS_ENCRYPT_KEY="your_encrypt_key" npm run auto-config
 
 # 或者直接运行并按提示输入
-node auto-config.mjs
+npm run auto-config
 ```
 
 脚本将：
-- 连接到WPS API并验证凭据
-- 自动获取`companyId`（通过`/v7/users/current` API）
+- 验证API凭据是否有效
+- 连接到WPS API并自动获取`companyId`
 - 生成完整的配置
 - 可选择性地将配置保存到`~/.openclaw/config.json`
 
@@ -47,7 +60,7 @@ node auto-config.mjs
       "appId": "your_wps_app_id",
       "secretKey": "your_wps_secret_key",
       "encryptKey": "your_wps_encrypt_key",
-      "companyId": "your_company_id",
+      "companyId": "your_company_id",  // 自动获取或手动配置
       "apiUrl": "https://openapi.wps.cn"
     }
   }

@@ -1,4 +1,5 @@
 import { WPSClient } from "./wps-api.js";
+import { ensureConfigComplete } from "./auto-config.js";
 
 /**
  * 发送消息的参数
@@ -23,15 +24,18 @@ export async function sendMessage(
   options?: SendMessageOptions
 ): Promise<{ ok: true; messageId?: string } | { ok: false; error: string }> {
   try {
+    // 确保配置完整，特别是companyId
+    const completeConfig = await ensureConfigComplete(config);
+
     const client = new WPSClient(
-      config.appId,
-      config.secretKey,
-      config.apiUrl || "https://openapi.wps.cn"
+      completeConfig.appId,
+      completeConfig.secretKey,
+      completeConfig.apiUrl || "https://openapi.wps.cn"
     );
 
     // 简单发送文本消息
-    await client.sendTextMessage(text, to);
-    return { ok: true };
+    const result = await client.sendTextMessage(text, to);
+    return { ok: true, messageId: result.message_id };
   } catch (error: any) {
     options?.log?.error?.(`[WPS] sendMessage failed: ${error.message}`);
     return { ok: false, error: error.message };

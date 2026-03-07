@@ -13,6 +13,7 @@ import { parseWPSMessage } from "./message-parser.js";
 import { WPSClient } from "./wps-api.js";
 import { sendMessage } from "./outbound-service.js";
 import { wpsXiezuoOnboardingAdapter } from "./onboarding.js";
+import { ensureConfigComplete } from "./auto-config.js";
 
 // 处理中的消息键（用于防止并发处理同一消息）
 const processingMessageKeys = new Set<string>();
@@ -102,6 +103,36 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
     targetResolver: {
       looksLikeId: (id: string): boolean => /^[\w+\-/=]+$/.test(id),
       hint: "<chatId>",
+    },
+    sendMessage: async (payload: any) => {
+      const { cfg, accountId, to, text, options } = payload;
+      
+      if (!cfg || !accountId) {
+        return {
+          ok: false,
+          error: "Missing config or accountId",
+        };
+      }
+
+      const account = resolveWpsXiezuoAccount(cfg, accountId);
+      if (!account.config?.appId || !account.config?.secretKey) {
+        return {
+          ok: false,
+          error: "Account not configured - Missing appId or secretKey",
+        };
+      }
+
+      try {
+        // 确保配置完整（包括companyId）
+        const completeConfig = await ensureConfigComplete(account.config);
+        const result = await sendMessage(completeConfig, to, text, options);
+        return result;
+      } catch (error: any) {
+        return {
+          ok: false,
+          error: error.message || "Failed to send message",
+        };
+      }
     },
   },
   gateway: {

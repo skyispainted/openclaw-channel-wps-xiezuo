@@ -535,6 +535,31 @@ export class WPSClient {
   }
 
   /**
+   * 获取当前用户信息
+   */
+  async getCurrentUser(): Promise<{
+    id: string;
+    user_name: string;
+    company_id: string;
+    avatar: string;
+  }> {
+    const accessToken = await oauthTokenManager.getAccessToken(
+      this.appId,
+      this.secretKey,
+      this.apiUrl
+    );
+
+    const path = `/v7/users/current`;
+    const result = await this.sendV7Request("GET", path, null, accessToken);
+
+    if (result.code !== 0) {
+      throw new Error(`获取用户信息失败: ${result.msg || "未知错误"}`);
+    }
+
+    return result.data;
+  }
+
+  /**
    * 测试连接（用于probe）
    */
   async testConnection(): Promise<boolean> {

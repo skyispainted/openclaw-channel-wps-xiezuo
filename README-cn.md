@@ -109,6 +109,26 @@ git pull
 openclaw gateway restart
 ```
 
+## 自动配置
+
+本插件包含一个自动配置脚本，可以帮助您自动获取公司 ID。
+
+使用自动配置脚本：
+
+```bash
+# 如果您已将 WPS 应用凭据设置为环境变量
+WPS_APP_ID="your_app_id" WPS_SECRET_KEY="your_secret_key" WPS_ENCRYPT_KEY="your_encrypt_key" node auto-config.mjs
+
+# 或运行脚本并在提示时输入凭据
+node auto-config.mjs
+```
+
+脚本将：
+1. 使用您的凭据连接到 WPS API
+2. 自动获取您的 `companyId`
+3. 为您生成完整的配置
+4. 可选择将配置保存到 `~/.openclaw/config.json`
+
 ## 配置说明
 
 ### 方法 1：交互式 CLI 配置（推荐）

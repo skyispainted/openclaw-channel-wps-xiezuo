@@ -54,25 +54,25 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
     },
     resolveAccount: (cfg: OpenClawConfig, accountId?: string | null) => {
       const id = accountId || DEFAULT_ACCOUNT_ID;
-      const rawAccount = resolveWpsXiezuoAccount(cfg, id);
-      const configured = Boolean(rawAccount.appId && rawAccount.secretKey);
+      const account = resolveWpsXiezuoAccount(cfg, id);
+      const configured = Boolean(account.config?.appId && account.config?.secretKey);
 
       return {
         accountId: id,
-        config: rawAccount,
-        enabled: rawAccount.enabled !== false,
+        config: account.config,
+        enabled: account.config?.enabled !== false,
         configured,
-        name: rawAccount.name || null,
+        name: account.config?.name || null,
       };
     },
     defaultAccountId: (): string => DEFAULT_ACCOUNT_ID,
     isConfigured: (account: any): boolean =>
-      Boolean(account.appId && account.secretKey && account.companyId),
+      Boolean(account.config?.appId && account.config?.secretKey && account.config?.companyId),
     describeAccount: (account: any) => ({
       accountId: account.accountId,
-      name: account.name || account.accountId,
+      name: account.config?.name || account.accountId,
       enabled: account.enabled,
-      configured: Boolean(account.appId),
+      configured: Boolean(account.config?.appId),
     }),
   },
   security: {
@@ -120,12 +120,12 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
     },
     sendText: async ({ cfg, to, text, accountId, log }: any) => {
       const account = resolveWpsXiezuoAccount(cfg, accountId);
-      if (!account.appId || !account.secretKey) {
+      if (!account.configured) {
         throw new Error("WPS not configured");
       }
 
       // 确保配置完整（包括companyId）
-      const completeConfig = await ensureConfigComplete(account);
+      const completeConfig = await ensureConfigComplete(account.config);
 
       try {
         const result = await sendMessage(completeConfig, to, text, { log });

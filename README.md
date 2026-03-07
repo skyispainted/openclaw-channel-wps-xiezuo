@@ -109,33 +109,6 @@ git pull
 openclaw gateway restart
 ```
 
-## Troubleshooting
-
-### Outbound not configured for channel
-
-If you encounter an "Outbound not configured for channel: wps-xiezuo" error, this indicates that the outbound messaging functionality is not properly configured. This commonly occurs when:
-
-1. **Missing Required Credentials**: The configuration lacks essential parameters like `appId`, `secretKey`, or `companyId`
-2. **Incomplete Setup**: Some parameters were entered but not all required fields are filled
-
-To resolve this:
-
-1. **Verify Complete Configuration**: Ensure your configuration includes all required parameters:
-   - `appId`: Your WPS application ID
-   - `secretKey`: Your WPS application secret key
-   - `encryptKey`: Encryption key for callback verification
-   - `companyId`: Your company ID (now auto-fetched if not provided)
-
-2. **Use Auto-Configuration**: Our auto-configuration tool can help fetch the `companyId` automatically using the WPS API:
-   ```bash
-   npm run auto-config
-   ```
-
-3. **Manual Verification**: You can manually verify the API connectivity:
-   ```bash
-   openclaw plugins probe wps-xiezuo
-   ```
-
 ## Auto Configuration
 
 This plugin includes an auto-configuration script that can help you retrieve your company ID automatically.
@@ -144,10 +117,10 @@ To use the auto-configuration script:
 
 ```bash
 # If you have already set up your WPS app credentials as environment variables
-WPS_APP_ID="your_app_id" WPS_SECRET_KEY="your_secret_key" WPS_ENCRYPT_KEY="your_encrypt_key" npm run auto-config
+WPS_APP_ID="your_app_id" WPS_SECRET_KEY="your_secret_key" WPS_ENCRYPT_KEY="your_encrypt_key" node auto-config.mjs
 
 # Or run the script and enter your credentials when prompted
-npm run auto-config
+node auto-config.mjs
 ```
 
 The script will:

@@ -55,19 +55,19 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
     resolveAccount: (cfg: OpenClawConfig, accountId?: string | null) => {
       const id = accountId || DEFAULT_ACCOUNT_ID;
       const account = resolveWpsXiezuoAccount(cfg, id);
-      const configured = Boolean(account.config?.appId && account.config?.secretKey);
+      const configured = Boolean(account.appId && account.secretKey);
 
       return {
         accountId: id,
-        config: account.config,
-        enabled: account.config?.enabled !== false,
+        config: account,
+        enabled: account.enabled !== false,
         configured,
-        name: account.config?.name || null,
+        name: account.name || null,
       };
     },
     defaultAccountId: (): string => DEFAULT_ACCOUNT_ID,
     isConfigured: (account: any): boolean =>
-      Boolean(account.config?.appId && account.config?.secretKey && account.config?.companyId),
+      Boolean(account.config?.appId && account.config?.secretKey),
     describeAccount: (account: any) => ({
       accountId: account.accountId,
       name: account.config?.name || account.accountId,
@@ -104,40 +104,34 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
       looksLikeId: (id: string): boolean => /^[\w+\-/=]+$/.test(id),
       hint: "<chatId>",
     },
-  },
-  outbound: {
-    deliveryMode: "direct" as const,
-    resolveTarget: ({ to }: any) => {
-      const trimmed = to?.trim();
-      if (!trimmed) {
+    sendMessage: async (payload: any) => {
+      const { cfg, accountId, to, text, options } = payload;
+      
+      if (!cfg || !accountId) {
         return {
-          ok: false as const,
-          error: new Error("WPS message requires --to <chatId>"),
+          ok: false,
+          error: "Missing config or accountId",
         };
       }
-      const targetId = trimmed.replace(/^(wps|wps-xiezuo|xiezuo):/i, "");
-      return { ok: true as const, to: targetId };
-    },
-    sendText: async ({ cfg, to, text, accountId, log }: any) => {
-      const account = resolveWpsXiezuoAccount(cfg, accountId);
-      if (!account.configured) {
-        throw new Error("WPS not configured");
-      }
 
-      // 确保配置完整（包括companyId）
-      const completeConfig = await ensureConfigComplete(account.config);
+      const account = resolveWpsXiezuoAccount(cfg, accountId);
+      if (!account.config?.appId || !account.config?.secretKey) {
+        return {
+          ok: false,
+          error: "Account not configured - Missing appId or secretKey",
+        };
+      }
 
       try {
-        const result = await sendMessage(completeConfig, to, text, { log });
-        if (!result.ok) {
-          throw new Error(result.error || "sendText failed");
-        }
+        // 确保配置完整（包括companyId）
+        const completeConfig = await ensureConfigComplete(account.config);
+        const result = await sendMessage(completeConfig, to, text, options);
+        return result;
+      } catch (error: any) {
         return {
-          channel: "wps-xiezuo",
-          messageId: result.messageId || undefined,
+          ok: false,
+          error: error.message || "Failed to send message",
         };
-      } catch (err: any) {
-        throw new Error(err.message || "sendText failed", { cause: err });
       }
     },
   },

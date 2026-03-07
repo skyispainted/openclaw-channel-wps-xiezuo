@@ -104,34 +104,89 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
       looksLikeId: (id: string): boolean => /^[\w+\-/=]+$/.test(id),
       hint: "<chatId>",
     },
-    sendMessage: async (payload: any) => {
-      const { cfg, accountId, to, text, options } = payload;
-      
-      if (!cfg || !accountId) {
+  },
+  outbound: {
+    deliveryMode: "direct" as const,
+    resolveTarget: ({ to }: any) => {
+      const trimmed = to?.trim();
+      if (!trimmed) {
         return {
-          ok: false,
-          error: "Missing config or accountId",
+          ok: false as const,
+          error: new Error("WPS message requires --to <chatId>"),
         };
       }
-
+      const targetId = trimmed.replace(/^(wps|wps-xiezuo|xiezuo):/i, "");
+      return { ok: true as const, to: targetId };
+    },
+    sendText: async ({ cfg, to, text, accountId, log }: any) => {
       const account = resolveWpsXiezuoAccount(cfg, accountId);
-      if (!account.config?.appId || !account.config?.secretKey) {
+      if (!account.appId || !account.secretKey) {
+        throw new Error("WPS not configured");
+      }
+
+      // 确保配置完整（包括companyId）
+      const completeConfig = await ensureConfigComplete(account);
+
+      try {
+        const result = await sendMessage(completeConfig, to, text, { log });
+        if (!result.ok) {
+          throw new Error(result.error || "sendText failed");
+        }
         return {
-          ok: false,
-          error: "Account not configured - Missing appId or secretKey",
+          channel: "wps-xiezuo",
+          messageId: result.messageId || undefined,
         };
+      } catch (err: any) {
+        throw new Error(err.message || "sendText failed", { cause: err });
+      }
+    },
+    sendMedia: async ({
+      cfg,
+      to,
+      mediaPath,
+      filePath,
+      mediaUrl,
+      mediaType: providedMediaType,
+      accountId,
+      log,
+    }: any) => {
+      const account = resolveWpsXiezuoAccount(cfg, accountId);
+      if (!account.appId || !account.secretKey) {
+        throw new Error("WPS not configured");
+      }
+
+      // 确保配置完整（包括companyId）
+      const completeConfig = await ensureConfigComplete(account);
+
+      // Support mediaPath/filePath/mediaUrl aliases for better CLI compatibility.
+      const rawMediaPath = mediaPath || filePath || mediaUrl;
+
+      if (!rawMediaPath) {
+        throw new Error(
+          `mediaPath, filePath, or mediaUrl is required. Received: ${JSON.stringify({
+            to,
+            mediaPath,
+            filePath,
+            mediaUrl,
+          })}`
+        );
       }
 
       try {
-        // 确保配置完整（包括companyId）
-        const completeConfig = await ensureConfigComplete(account.config);
-        const result = await sendMessage(completeConfig, to, text, options);
-        return result;
-      } catch (error: any) {
+        // Default to image type if not specified
+        const mediaType = providedMediaType || "image";
+        const result = await sendMedia(completeConfig, to, rawMediaPath, mediaType as any, { log });
+
+        if (!result.ok) {
+          throw new Error(result.error || "sendMedia failed");
+        }
+
         return {
-          ok: false,
-          error: error.message || "Failed to send message",
+          channel: "wps-xiezuo",
+          messageId: result.messageId || undefined,
         };
+      } catch (err: any) {
+        throw new Error(err.message || "sendMedia failed", { cause: err });
       }
     },
   },

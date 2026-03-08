@@ -495,8 +495,10 @@ export async function handleWpsMessage(params: {
   // 7. 发送"思考中"提示（如果启用）
   if (config.showThinking !== false) {
     try {
-      log?.debug?.(`[WPS] 准备发送思考提示 - chatType=${parsed.chatType}, chatId=${parsed.chatId}`);
-      await client.sendTextMessage("🤔 思考中，请稍候...", parsed.chatId, parsed.chatType, undefined, "plain");
+      // 单聊时使用 senderId，群聊时使用 chatId
+      const targetId = parsed.chatType === "p2p" ? parsed.senderId : parsed.chatId;
+      log?.debug?.(`[WPS] 准备发送思考提示 - chatType=${parsed.chatType}, targetId=${targetId}, senderId=${parsed.senderId}, chatId=${parsed.chatId}`);
+      await client.sendTextMessage("🤔 思考中，请稍候...", targetId, parsed.chatType, undefined, "plain");
       log?.debug?.(`[WPS] 思考提示发送成功`);
     } catch (err: any) {
       log?.warn?.(`[WPS] 思考提示发送失败: ${err.message}`);
@@ -516,6 +518,9 @@ export async function handleWpsMessage(params: {
         log?.debug?.(`[WPS] ParsedMessage详情: chatType=${parsed.chatType}, chatId=${parsed.chatId}, senderId=${parsed.senderId}, isAtBot=${parsed.isAtBot}, messageId=${parsed.messageId}`);
 
         try {
+          // 单聊时使用 senderId，群聊时使用 chatId
+          const targetId = parsed.chatType === "p2p" ? parsed.senderId : parsed.chatId;
+
           // 智能消息类型判断
           // 优先级：channelData.messageType > mediaUrls > text
 
@@ -525,21 +530,21 @@ export async function handleWpsMessage(params: {
           if (messageType === "image" && payload.mediaUrl) {
             // 发送图片消息
             log?.debug?.(`[WPS] 检测到图片消息类型 - mediaUrl=${payload.mediaUrl}`);
-            await client.sendImageMessage(payload.mediaUrl, parsed.chatId, parsed.chatType);
+            await client.sendImageMessage(payload.mediaUrl, targetId, parsed.chatType);
             log?.debug?.(`[WPS] 图片消息发送成功`);
             return;
           } else if (messageType === "file" && payload.mediaUrl) {
             // 发送文件消息
             const fileName = extractFileNameFromUrl(payload.mediaUrl);
             log?.debug?.(`[WPS] 检测到文件消息类型 - fileName=${fileName}`);
-            await client.sendFileMessage(payload.mediaUrl, parsed.chatId, parsed.chatType, fileName);
+            await client.sendFileMessage(payload.mediaUrl, targetId, parsed.chatType, fileName);
             log?.debug?.(`[WPS] 文件消息发送成功`);
             return;
           } else if (messageType === "rich_text" && payload.text) {
             // 发送富文本消息
             const elements = parseTextToRichTextElements(payload.text);
             log?.debug?.(`[WPS] 发送富文本消息 - 元素数量=${elements.length}`);
-            await client.sendRichTextMessage(elements, parsed.chatId, parsed.chatType);
+            await client.sendRichTextMessage(elements, targetId, parsed.chatType);
             log?.debug?.(`[WPS] 富文本消息发送成功`);
             return;
           }
@@ -550,12 +555,12 @@ export async function handleWpsMessage(params: {
               // 单个媒体，尝试发送为图片消息
               try {
                 log?.debug?.(`[WPS] 发送单个图片 - url=${payload.mediaUrls[0]}`);
-                await client.sendImageMessage(payload.mediaUrls[0], parsed.chatId, parsed.chatType);
+                await client.sendImageMessage(payload.mediaUrls[0], targetId, parsed.chatType);
                 log?.debug?.(`[WPS] 单个图片消息发送成功`);
               } catch (err) {
                 // 降级为文本消息
                 log?.debug?.(`[WPS] 单个图片消息发送失败，降级为文本: ${payload.mediaUrls[0]}`);
-                await client.sendTextMessage(payload.text || payload.mediaUrls[0], parsed.chatId, parsed.chatType);
+                await client.sendTextMessage(payload.text || payload.mediaUrls[0], targetId, parsed.chatType);
                 log?.debug?.(`[WPS] 降级文本消息发送成功`);
               }
             } else {
@@ -599,7 +604,7 @@ export async function handleWpsMessage(params: {
               }
 
               log?.debug?.(`[WPS] 发送多个图片（富文本） - 图片数量=${payload.mediaUrls.length}`);
-              await client.sendRichTextMessage(elements, parsed.chatId, parsed.chatType);
+              await client.sendRichTextMessage(elements, targetId, parsed.chatType);
               log?.debug?.(`[WPS] 多个图片消息发送成功`);
             }
             return;
@@ -609,12 +614,12 @@ export async function handleWpsMessage(params: {
           if (payload.mediaUrl) {
             try {
               log?.debug?.(`[WPS] 发送单图片消息 - mediaUrl=${payload.mediaUrl}`);
-              await client.sendImageMessage(payload.mediaUrl, parsed.chatId, parsed.chatType);
+              await client.sendImageMessage(payload.mediaUrl, targetId, parsed.chatType);
               log?.debug?.(`[WPS] 单图片消息发送成功`);
             } catch (err) {
               // 降级为文本消息
               log?.debug?.(`[WPS] 单图片消息发送失败，降级为文本: ${payload.mediaUrl}`);
-              await client.sendTextMessage(payload.text || payload.mediaUrl, parsed.chatId, parsed.chatType);
+              await client.sendTextMessage(payload.text || payload.mediaUrl, targetId, parsed.chatType);
               log?.debug?.(`[WPS] 降级文本消息发送成功`);
             }
             log?.debug?.(`[WPS] 单图片消息处理完成`);
@@ -624,7 +629,7 @@ export async function handleWpsMessage(params: {
           // 4. 默认发送文本消息
           if (payload.text) {
             log?.debug?.(`[WPS] 发送纯文本消息 - 内容长度=${payload.text.length}`);
-            await client.sendTextMessage(payload.text, parsed.chatId, parsed.chatType, undefined, "markdown");
+            await client.sendTextMessage(payload.text, targetId, parsed.chatType, undefined, "markdown");
             log?.debug?.(`[WPS] 纯文本消息发送成功`);
           }
         } catch (err: any) {

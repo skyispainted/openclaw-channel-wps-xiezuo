@@ -490,7 +490,7 @@ export async function handleWpsMessage(params: {
   if (config.showThinking !== false) {
     try {
       log?.debug?.(`[WPS] 准备发送思考提示 - chatType=${parsed.chatType}, chatId=${parsed.chatId}`);
-      await client.sendTextMessage("🤔 思考中，请稍候...", parsed.chatId, parsed.chatType);
+      await client.sendTextMessage("🤔 思考中，请稍候...", parsed.chatId, parsed.chatType, undefined, "plain");
       log?.debug?.(`[WPS] 思考提示发送成功`);
     } catch (err: any) {
       log?.warn?.(`[WPS] 思考提示发送失败: ${err.message}`);
@@ -618,7 +618,7 @@ export async function handleWpsMessage(params: {
           // 4. 默认发送文本消息
           if (payload.text) {
             log?.debug?.(`[WPS] 发送纯文本消息 - 内容长度=${payload.text.length}`);
-            await client.sendTextMessage(payload.text, parsed.chatId, parsed.chatType);
+            await client.sendTextMessage(payload.text, parsed.chatId, parsed.chatType, undefined, "markdown");
             log?.debug?.(`[WPS] 纯文本消息发送成功`);
           }
         } catch (err: any) {

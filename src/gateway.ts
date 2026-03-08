@@ -7,6 +7,7 @@ import type { SimpleXiezuoAccountConfig } from "./config-schema.js";
 import { parseWPSMessage, type WPSEvent } from "./message-parser.js";
 import { verifyEventSignature, decryptEventData } from "./crypto.js";
 import { handleWpsMessage } from "./channel.js";
+import { preloadCompanyId } from "./company-id-cache.js";
 
 // 常量定义
 const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB
@@ -71,6 +72,18 @@ export async function startSimpleXiezuoAccount(ctx: ChannelGatewayContext<any>):
 }> {
   const accountId = ctx.account.accountId;
   const config = ctx.account.config as SimpleXiezuoAccountConfig;
+
+  // 启动时预加载 companyId
+  if (config.appId && config.secretKey) {
+    try {
+      await preloadCompanyId(accountId, config, ctx.log);
+    } catch (error) {
+      // 预加载失败不影响启动，但会记录警告（后续发送消息时会再次尝试）
+      ctx.log?.warn?.(
+        `[${accountId}] ⚠️ 预加载 companyId 失败，将在首次发送消息时尝试获取: ${error}`
+      );
+    }
+  }
 
   // 验证必需配置
   if (!config.appId || !config.secretKey) {

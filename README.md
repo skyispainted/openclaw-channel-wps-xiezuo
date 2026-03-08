@@ -109,6 +109,26 @@ git pull
 openclaw gateway restart
 ```
 
+## Auto Configuration
+
+This plugin includes an auto-configuration script that can help you retrieve your company ID automatically.
+
+To use the auto-configuration script:
+
+```bash
+# If you have already set up your WPS app credentials as environment variables
+WPS_APP_ID="your_app_id" WPS_SECRET_KEY="your_secret_key" WPS_ENCRYPT_KEY="your_encrypt_key" node auto-config.mjs
+
+# Or run the script and enter your credentials when prompted
+node auto-config.mjs
+```
+
+The script will:
+1. Connect to the WPS API using your credentials
+2. Automatically fetch your `companyId`
+3. Generate the complete configuration for you
+4. Optionally save the configuration to `~/.openclaw/config.json`
+
 ## Configuration
 
 ### Method 1: Interactive CLI (Recommended)

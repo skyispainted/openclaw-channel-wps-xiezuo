@@ -39,7 +39,8 @@
     "lint:fix": "oxlint --type-aware --fix index.ts src && pnpm format",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "type-check": "tsc -p tsconfig.json"
+    "type-check": "tsc -p tsconfig.json",
+    "auto-config": "node auto-config.mjs"
   },
   "dependencies": {
     "zod": "^4.3.6"

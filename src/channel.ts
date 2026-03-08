@@ -11,8 +11,9 @@ import { normalizeAllowFrom, isSenderAllowed, isSenderGroupAllowed } from "./acc
 import type { WPSEvent, ParsedMessage } from "./message-parser.js";
 import { parseWPSMessage } from "./message-parser.js";
 import { WPSClient } from "./wps-api.js";
-import { sendMessage } from "./outbound-service.js";
+import { sendMessage, sendMedia } from "./outbound-service.js";
 import { wpsXiezuoOnboardingAdapter } from "./onboarding.js";
+import { getCompleteConfig } from "./company-id-cache.js";
 
 // 处理中的消息键（用于防止并发处理同一消息）
 const processingMessageKeys = new Set<string>();
@@ -102,6 +103,97 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
     targetResolver: {
       looksLikeId: (id: string): boolean => /^[\w+\-/=]+$/.test(id),
       hint: "<chatId>",
+    },
+  },
+  outbound: {
+    deliveryMode: "direct" as const,
+    resolveTarget: ({ to }: any) => {
+      const trimmed = to?.trim();
+      if (!trimmed) {
+        return {
+          ok: false as const,
+          error: new Error("WPS message requires --to <chatId>"),
+        };
+      }
+      const targetId = trimmed.replace(/^(wps|wps-xiezuo|xiezuo):/i, "");
+      return { ok: true as const, to: targetId };
+    },
+    sendText: async ({ cfg, to, text, accountId, log }: any) => {
+      const account = resolveWpsXiezuoAccount(cfg, accountId);
+      if (!account.appId || !account.secretKey) {
+        throw new Error("WPS not configured");
+      }
+
+      // 使用预加载的完整配置（包含companyId）
+      const completeConfig = getCompleteConfig(accountId, {
+        ...account,
+        accountId,
+      });
+
+      try {
+        const result = await sendMessage(completeConfig, to, text, { log });
+        if (!result.ok) {
+          throw new Error(result.error || "sendText failed");
+        }
+        return {
+          channel: "wps-xiezuo",
+          messageId: result.messageId || undefined,
+        };
+      } catch (err: any) {
+        throw new Error(err.message || "sendText failed", { cause: err });
+      }
+    },
+    sendMedia: async ({
+      cfg,
+      to,
+      mediaPath,
+      filePath,
+      mediaUrl,
+      mediaType: providedMediaType,
+      accountId,
+      log,
+    }: any) => {
+      const account = resolveWpsXiezuoAccount(cfg, accountId);
+      if (!account.appId || !account.secretKey) {
+        throw new Error("WPS not configured");
+      }
+
+      // 使用预加载的完整配置（包含companyId）
+      const completeConfig = getCompleteConfig(accountId, {
+        ...account,
+        accountId,
+      });
+
+      // Support mediaPath/filePath/mediaUrl aliases for better CLI compatibility.
+      const rawMediaPath = mediaPath || filePath || mediaUrl;
+
+      if (!rawMediaPath) {
+        throw new Error(
+          `mediaPath, filePath, or mediaUrl is required. Received: ${JSON.stringify({
+            to,
+            mediaPath,
+            filePath,
+            mediaUrl,
+          })}`
+        );
+      }
+
+      try {
+        // Default to image type if not specified
+        const mediaType = providedMediaType || "image";
+        const result = await sendMedia(completeConfig, to, rawMediaPath, mediaType as any, { log });
+
+        if (!result.ok) {
+          throw new Error(result.error || "sendMedia failed");
+        }
+
+        return {
+          channel: "wps-xiezuo",
+          messageId: result.messageId || undefined,
+        };
+      } catch (err: any) {
+        throw new Error(err.message || "sendMedia failed", { cause: err });
+      }
     },
   },
   gateway: {

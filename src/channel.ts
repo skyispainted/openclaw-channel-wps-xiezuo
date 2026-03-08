@@ -350,6 +350,9 @@ export async function handleWpsMessage(params: {
     return;
   }
 
+  log?.debug?.(`[WPS] 消息解析结果 - parsed:`, JSON.stringify(parsed, null, 2));
+  log?.debug?.(`[WPS] 消息解析结果 - chatType=${parsed.chatType}, chatId=${parsed.chatId}, senderId=${parsed.senderId}, isAtBot=${parsed.isAtBot}, messageId=${parsed.messageId}`);
+
   const config = getConfig(cfg, accountId);
 
   // 3. 检查群聊是否需要@机器人
@@ -406,6 +409,8 @@ export async function handleWpsMessage(params: {
     config.secretKey!,
     config.apiUrl || "https://openapi.wps.cn"
   );
+
+  log?.debug?.(`[WPS] 路由和客户端创建完成 - isDirect=${isDirect}, route.agentId=${route.agentId}, route.sessionKey=${route.sessionKey}`);
 
   // 6.5 解析 wps-storage 格式的媒体URL（如果有）
   let resolvedMediaUrl: string | undefined = parsed.mediaUrls?.[0];

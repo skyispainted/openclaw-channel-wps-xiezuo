@@ -115,13 +115,7 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
           error: new Error("WPS message requires --to <chatId>"),
         };
       }
-      // 检查是否只有渠道前缀而没有实际的chatId
-      if (trimmed === "wps-xiezuo" || trimmed === "wps" || trimmed === "xiezuo") {
-        return {
-          ok: false as const,
-          error: new Error(`Invalid target: "${trimmed}". Please specify a chatId, e.g., --to wps-xiezuo:<chatId>`),
-        };
-      }
+      // 剥离渠道前缀
       const targetId = trimmed.replace(/^(wps|wps-xiezuo|xiezuo):/i, "");
       if (!targetId) {
         return {

@@ -490,6 +490,7 @@ export async function handleWpsMessage(params: {
   });
 
   log?.info?.(`[WPS] 接收消息: from=${fromLabel} text="${parsed.text.slice(0, 50)}..."`);
+  log?.info?.(`[WPS] 消息解析结果 - chatType=${parsed.chatType}, chatId=${parsed.chatId}, senderId=${parsed.senderId}, isAtBot=${parsed.isAtBot}, messageId=${parsed.messageId}`);
 
   // 7. 发送"思考中"提示（如果启用）
   if (config.showThinking !== false) {

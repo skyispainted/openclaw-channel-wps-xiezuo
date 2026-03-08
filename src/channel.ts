@@ -11,9 +11,9 @@ import { normalizeAllowFrom, isSenderAllowed, isSenderGroupAllowed } from "./acc
 import type { WPSEvent, ParsedMessage } from "./message-parser.js";
 import { parseWPSMessage } from "./message-parser.js";
 import { WPSClient } from "./wps-api.js";
-import { sendMessage } from "./outbound-service.js";
+import { sendMessage, sendMedia } from "./outbound-service.js";
 import { wpsXiezuoOnboardingAdapter } from "./onboarding.js";
-import { ensureConfigComplete } from "./auto-config.js";
+import { getCompleteConfig } from "./company-id-cache.js";
 
 // 处理中的消息键（用于防止并发处理同一消息）
 const processingMessageKeys = new Set<string>();
@@ -124,8 +124,11 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
         throw new Error("WPS not configured");
       }
 
-      // 确保配置完整（包括companyId）
-      const completeConfig = await ensureConfigComplete(account);
+      // 使用预加载的完整配置（包含companyId）
+      const completeConfig = getCompleteConfig(accountId, {
+        ...account,
+        accountId,
+      });
 
       try {
         const result = await sendMessage(completeConfig, to, text, { log });
@@ -155,8 +158,11 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
         throw new Error("WPS not configured");
       }
 
-      // 确保配置完整（包括companyId）
-      const completeConfig = await ensureConfigComplete(account);
+      // 使用预加载的完整配置（包含companyId）
+      const completeConfig = getCompleteConfig(accountId, {
+        ...account,
+        accountId,
+      });
 
       // Support mediaPath/filePath/mediaUrl aliases for better CLI compatibility.
       const rawMediaPath = mediaPath || filePath || mediaUrl;

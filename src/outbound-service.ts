@@ -1,5 +1,5 @@
 import { WPSClient } from "./wps-api.js";
-import { ensureConfigComplete } from "./auto-config.js";
+import { getCompleteConfig } from "./company-id-cache.js";
 
 /**
  * 发送消息的参数
@@ -24,8 +24,8 @@ export async function sendMessage(
   options?: SendMessageOptions
 ): Promise<{ ok: true; messageId?: string } | { ok: false; error: string }> {
   try {
-    // 确保配置完整，特别是companyId
-    const completeConfig = await ensureConfigComplete(config);
+    // 使用缓存的完整配置（包含companyId）
+    const completeConfig = getCompleteConfig(config.accountId || "default", config);
 
     const client = new WPSClient(
       completeConfig.appId,
@@ -60,8 +60,8 @@ export async function sendMedia(
   options?: SendMessageOptions
 ): Promise<{ ok: true; messageId?: string } | { ok: false; error: string }> {
   try {
-    // 确保配置完整，特别是companyId
-    const completeConfig = await ensureConfigComplete(config);
+    // 使用缓存的完整配置（包含companyId）
+    const completeConfig = getCompleteConfig(config.accountId || "default", config);
 
     const client = new WPSClient(
       completeConfig.appId,

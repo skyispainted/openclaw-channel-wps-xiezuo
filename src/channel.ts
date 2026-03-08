@@ -115,11 +115,25 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
           error: new Error("WPS message requires --to <chatId>"),
         };
       }
+      // 检查是否只有渠道前缀而没有实际的chatId
+      if (trimmed === "wps-xiezuo" || trimmed === "wps" || trimmed === "xiezuo") {
+        return {
+          ok: false as const,
+          error: new Error(`Invalid target: "${trimmed}". Please specify a chatId, e.g., --to wps-xiezuo:<chatId>`),
+        };
+      }
       const targetId = trimmed.replace(/^(wps|wps-xiezuo|xiezuo):/i, "");
+      if (!targetId) {
+        return {
+          ok: false as const,
+          error: new Error(`Invalid target format: "${trimmed}". Expected format: wps-xiezuo:<chatId>`),
+        };
+      }
       return { ok: true as const, to: targetId };
     },
     sendText: async ({ cfg, to, text, accountId, log }: any) => {
       const account = resolveWpsXiezuoAccount(cfg, accountId);
+      log?.debug?.(`[WPS] outbound sendText called - rawTo=${to}, text=${text?.slice(0, 30)}`);
       if (!account.appId || !account.secretKey) {
         throw new Error("WPS not configured");
       }
@@ -131,7 +145,13 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
       });
 
       try {
-        const result = await sendMessage(completeConfig, to, text, { log });
+        // 从 to 参数判断 chatType
+        // WPS API 中，私聊使用 receiver.type="user"，群聊使用 "chat"
+        // 根据 OpenClaw 规范，私聊的 to 参数可能包含 user: 前缀
+        const chatType = to?.startsWith("user:") ? "p2p" : "chat";
+
+        log?.debug?.(`[WPS] outbound sendText - to=${to}, chatType=${chatType}`);
+        const result = await sendMessage(completeConfig, to, text, chatType, { log });
         if (!result.ok) {
           throw new Error(result.error || "sendText failed");
         }
@@ -140,7 +160,8 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
           messageId: result.messageId || undefined,
         };
       } catch (err: any) {
-        throw new Error(err.message || "sendText failed", { cause: err });
+        log?.error?.(`[WPS] outbound sendText error: ${err.message}`);
+        throw new Error(`sendText failed: ${err.message}`, { cause: err });
       }
     },
     sendMedia: async ({
@@ -154,6 +175,7 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
       log,
     }: any) => {
       const account = resolveWpsXiezuoAccount(cfg, accountId);
+      log?.debug?.(`[WPS] outbound sendMedia called - rawTo=${to}, mediaPath=${mediaPath}, mediaType=${providedMediaType}`);
       if (!account.appId || !account.secretKey) {
         throw new Error("WPS not configured");
       }
@@ -164,24 +186,29 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
         accountId,
       });
 
-      // Support mediaPath/filePath/mediaUrl aliases for better CLI compatibility.
-      const rawMediaPath = mediaPath || filePath || mediaUrl;
-
-      if (!rawMediaPath) {
-        throw new Error(
-          `mediaPath, filePath, or mediaUrl is required. Received: ${JSON.stringify({
-            to,
-            mediaPath,
-            filePath,
-            mediaUrl,
-          })}`
-        );
-      }
-
       try {
+        // 从 to 参数判断 chatType
+        const chatType = to?.startsWith("user:") ? "p2p" : "chat";
+
+        // Support mediaPath/filePath/mediaUrl aliases for better CLI compatibility.
+        const rawMediaPath = mediaPath || filePath || mediaUrl;
+
+        if (!rawMediaPath) {
+          throw new Error(
+            `mediaPath, filePath, or mediaUrl is required. Received: ${JSON.stringify({
+              to,
+              mediaPath,
+              filePath,
+              mediaUrl,
+            })}`
+          );
+        }
+
+        log?.debug?.(`[WPS] outbound sendMedia - to=${to}, chatType=${chatType}, mediaPath=${rawMediaPath}`);
+
         // Default to image type if not specified
         const mediaType = providedMediaType || "image";
-        const result = await sendMedia(completeConfig, to, rawMediaPath, mediaType as any, { log });
+        const result = await sendMedia(completeConfig, to, rawMediaPath, mediaType as any, chatType, { log });
 
         if (!result.ok) {
           throw new Error(result.error || "sendMedia failed");
@@ -192,7 +219,8 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
           messageId: result.messageId || undefined,
         };
       } catch (err: any) {
-        throw new Error(err.message || "sendMedia failed", { cause: err });
+        log?.error?.(`[WPS] outbound sendMedia error: ${err.message}`);
+        throw new Error(`sendMedia failed: ${err.message}`, { cause: err });
       }
     },
   },
@@ -270,6 +298,7 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
     },
   },
 };
+
 
 /**
  * 处理WPS消息（在gateway中调用）
@@ -654,3 +683,4 @@ function parseTextToRichTextElements(text: string): Array<{
 }
 
 export { detectMediaTypeFromExtension } from "./media-utils.js";
+

@@ -42,7 +42,7 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
     edit: true,
     reactions: true,
     nativeCommands: true,
-    blockStreaming: false,
+    blockStreaming: true,
   },
   reload: {
     configPrefixes: ["channels.wps-xiezuo"],

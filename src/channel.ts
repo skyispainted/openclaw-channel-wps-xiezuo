@@ -42,7 +42,7 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
     edit: true,
     reactions: true,
     nativeCommands: true,
-    blockStreaming: false,
+    blockStreaming: true,
   },
   reload: {
     configPrefixes: ["channels.wps-xiezuo"],
@@ -115,11 +115,19 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
           error: new Error("WPS message requires --to <chatId>"),
         };
       }
+      // 剥离渠道前缀
       const targetId = trimmed.replace(/^(wps|wps-xiezuo|xiezuo):/i, "");
+      if (!targetId) {
+        return {
+          ok: false as const,
+          error: new Error(`Invalid target format: "${trimmed}". Expected format: wps-xiezuo:<chatId>`),
+        };
+      }
       return { ok: true as const, to: targetId };
     },
     sendText: async ({ cfg, to, text, accountId, log }: any) => {
       const account = resolveWpsXiezuoAccount(cfg, accountId);
+      log?.debug?.(`[WPS] outbound sendText called - rawTo=${to}, text=${text?.slice(0, 30)}`);
       if (!account.appId || !account.secretKey) {
         throw new Error("WPS not configured");
       }
@@ -131,7 +139,13 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
       });
 
       try {
-        const result = await sendMessage(completeConfig, to, text, { log });
+        // 从 to 参数判断 chatType
+        // WPS API 中，私聊使用 receiver.type="user"，群聊使用 "chat"
+        // 根据 OpenClaw 规范，私聊的 to 参数可能包含 user: 前缀
+        const chatType = to?.startsWith("user:") ? "p2p" : "chat";
+
+        log?.debug?.(`[WPS] outbound sendText - to=${to}, chatType=${chatType}`);
+        const result = await sendMessage(completeConfig, to, text, chatType, { log });
         if (!result.ok) {
           throw new Error(result.error || "sendText failed");
         }
@@ -140,7 +154,8 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
           messageId: result.messageId || undefined,
         };
       } catch (err: any) {
-        throw new Error(err.message || "sendText failed", { cause: err });
+        log?.error?.(`[WPS] outbound sendText error: ${err.message}`);
+        throw new Error(`sendText failed: ${err.message}`, { cause: err });
       }
     },
     sendMedia: async ({
@@ -154,6 +169,7 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
       log,
     }: any) => {
       const account = resolveWpsXiezuoAccount(cfg, accountId);
+      log?.debug?.(`[WPS] outbound sendMedia called - rawTo=${to}, mediaPath=${mediaPath}, mediaType=${providedMediaType}`);
       if (!account.appId || !account.secretKey) {
         throw new Error("WPS not configured");
       }
@@ -164,24 +180,29 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
         accountId,
       });
 
-      // Support mediaPath/filePath/mediaUrl aliases for better CLI compatibility.
-      const rawMediaPath = mediaPath || filePath || mediaUrl;
-
-      if (!rawMediaPath) {
-        throw new Error(
-          `mediaPath, filePath, or mediaUrl is required. Received: ${JSON.stringify({
-            to,
-            mediaPath,
-            filePath,
-            mediaUrl,
-          })}`
-        );
-      }
-
       try {
+        // 从 to 参数判断 chatType
+        const chatType = to?.startsWith("user:") ? "p2p" : "chat";
+
+        // Support mediaPath/filePath/mediaUrl aliases for better CLI compatibility.
+        const rawMediaPath = mediaPath || filePath || mediaUrl;
+
+        if (!rawMediaPath) {
+          throw new Error(
+            `mediaPath, filePath, or mediaUrl is required. Received: ${JSON.stringify({
+              to,
+              mediaPath,
+              filePath,
+              mediaUrl,
+            })}`
+          );
+        }
+
+        log?.debug?.(`[WPS] outbound sendMedia - to=${to}, chatType=${chatType}, mediaPath=${rawMediaPath}`);
+
         // Default to image type if not specified
         const mediaType = providedMediaType || "image";
-        const result = await sendMedia(completeConfig, to, rawMediaPath, mediaType as any, { log });
+        const result = await sendMedia(completeConfig, to, rawMediaPath, mediaType as any, chatType, { log });
 
         if (!result.ok) {
           throw new Error(result.error || "sendMedia failed");
@@ -192,7 +213,8 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
           messageId: result.messageId || undefined,
         };
       } catch (err: any) {
-        throw new Error(err.message || "sendMedia failed", { cause: err });
+        log?.error?.(`[WPS] outbound sendMedia error: ${err.message}`);
+        throw new Error(`sendMedia failed: ${err.message}`, { cause: err });
       }
     },
   },
@@ -271,6 +293,7 @@ export const simpleXiezuoPlugin: ChannelPlugin = {
   },
 };
 
+
 /**
  * 处理WPS消息（在gateway中调用）
  */
@@ -320,6 +343,9 @@ export async function handleWpsMessage(params: {
     log?.error?.(`[WPS] 消息解析失败: ${error}`);
     return;
   }
+
+  log?.debug?.(`[WPS] 消息解析结果 - parsed:`, JSON.stringify(parsed, null, 2));
+  log?.debug?.(`[WPS] 消息解析结果 - chatType=${parsed.chatType}, chatId=${parsed.chatId}, senderId=${parsed.senderId}, isAtBot=${parsed.isAtBot}, messageId=${parsed.messageId}`);
 
   const config = getConfig(cfg, accountId);
 
@@ -377,6 +403,8 @@ export async function handleWpsMessage(params: {
     config.secretKey!,
     config.apiUrl || "https://openapi.wps.cn"
   );
+
+  log?.debug?.(`[WPS] 路由和客户端创建完成 - isDirect=${isDirect}, route.agentId=${route.agentId}, route.sessionKey=${route.sessionKey}`);
 
   // 6.5 解析 wps-storage 格式的媒体URL（如果有）
   let resolvedMediaUrl: string | undefined = parsed.mediaUrls?.[0];
@@ -456,13 +484,19 @@ export async function handleWpsMessage(params: {
   });
 
   log?.info?.(`[WPS] 接收消息: from=${fromLabel} text="${parsed.text.slice(0, 50)}..."`);
+  log?.info?.(`[WPS] 消息解析结果 - chatType=${parsed.chatType}, chatId=${parsed.chatId}, senderId=${parsed.senderId}, isAtBot=${parsed.isAtBot}, messageId=${parsed.messageId}`);
 
   // 7. 发送"思考中"提示（如果启用）
   if (config.showThinking !== false) {
     try {
-      await client.sendTextMessage("🤔 思考中，请稍候...", parsed.chatId);
+      // 单聊时使用 senderId，群聊时使用 chatId
+      const targetId = parsed.chatType === "p2p" ? parsed.senderId : parsed.chatId;
+      log?.debug?.(`[WPS] 准备发送思考提示 - chatType=${parsed.chatType}, targetId=${targetId}, senderId=${parsed.senderId}, chatId=${parsed.chatId}`);
+      await client.sendTextMessage("🤔 思考中，请稍候...", targetId, parsed.chatType, undefined, "plain");
+      log?.debug?.(`[WPS] 思考提示发送成功`);
     } catch (err: any) {
-      log?.debug?.(`[WPS] 思考提示发送失败: ${err.message}`);
+      log?.warn?.(`[WPS] 思考提示发送失败: ${err.message}`);
+      log?.debug?.(`[WPS] ParsedMessage详情: chatType=${parsed.chatType}, chatId=${parsed.chatId}, senderId=${parsed.senderId}, isAtBot=${parsed.isAtBot}`);
     }
   }
 
@@ -473,7 +507,14 @@ export async function handleWpsMessage(params: {
     dispatcherOptions: {
       responsePrefix: "",
       deliver: async (payload) => {
+        // 打印ParsedMessage关键信息用于debug
+        log?.debug?.(`[WPS] 准备发送回复消息`);
+        log?.debug?.(`[WPS] ParsedMessage详情: chatType=${parsed.chatType}, chatId=${parsed.chatId}, senderId=${parsed.senderId}, isAtBot=${parsed.isAtBot}, messageId=${parsed.messageId}`);
+
         try {
+          // 单聊时使用 senderId，群聊时使用 chatId
+          const targetId = parsed.chatType === "p2p" ? parsed.senderId : parsed.chatId;
+
           // 智能消息类型判断
           // 优先级：channelData.messageType > mediaUrls > text
 
@@ -482,17 +523,23 @@ export async function handleWpsMessage(params: {
 
           if (messageType === "image" && payload.mediaUrl) {
             // 发送图片消息
-            await client.sendImageMessage(payload.mediaUrl, parsed.chatId);
+            log?.debug?.(`[WPS] 检测到图片消息类型 - mediaUrl=${payload.mediaUrl}`);
+            await client.sendImageMessage(payload.mediaUrl, targetId, parsed.chatType);
+            log?.debug?.(`[WPS] 图片消息发送成功`);
             return;
           } else if (messageType === "file" && payload.mediaUrl) {
             // 发送文件消息
             const fileName = extractFileNameFromUrl(payload.mediaUrl);
-            await client.sendFileMessage(payload.mediaUrl, parsed.chatId, fileName);
+            log?.debug?.(`[WPS] 检测到文件消息类型 - fileName=${fileName}`);
+            await client.sendFileMessage(payload.mediaUrl, targetId, parsed.chatType, fileName);
+            log?.debug?.(`[WPS] 文件消息发送成功`);
             return;
           } else if (messageType === "rich_text" && payload.text) {
             // 发送富文本消息
             const elements = parseTextToRichTextElements(payload.text);
-            await client.sendRichTextMessage(elements, parsed.chatId);
+            log?.debug?.(`[WPS] 发送富文本消息 - 元素数量=${elements.length}`);
+            await client.sendRichTextMessage(elements, targetId, parsed.chatType);
+            log?.debug?.(`[WPS] 富文本消息发送成功`);
             return;
           }
 
@@ -501,11 +548,14 @@ export async function handleWpsMessage(params: {
             if (payload.mediaUrls.length === 1) {
               // 单个媒体，尝试发送为图片消息
               try {
-                await client.sendImageMessage(payload.mediaUrls[0], parsed.chatId);
+                log?.debug?.(`[WPS] 发送单个图片 - url=${payload.mediaUrls[0]}`);
+                await client.sendImageMessage(payload.mediaUrls[0], targetId, parsed.chatType);
+                log?.debug?.(`[WPS] 单个图片消息发送成功`);
               } catch (err) {
                 // 降级为文本消息
-                log?.debug?.(`[WPS] 图片消息发送失败，降级为文本: ${payload.mediaUrls[0]}`);
-                await client.sendTextMessage(payload.text || payload.mediaUrls[0], parsed.chatId);
+                log?.debug?.(`[WPS] 单个图片消息发送失败，降级为文本: ${payload.mediaUrls[0]}`);
+                await client.sendTextMessage(payload.text || payload.mediaUrls[0], targetId, parsed.chatType);
+                log?.debug?.(`[WPS] 降级文本消息发送成功`);
               }
             } else {
               // 多个媒体，使用富文本消息
@@ -547,7 +597,9 @@ export async function handleWpsMessage(params: {
                 });
               }
 
-              await client.sendRichTextMessage(elements, parsed.chatId);
+              log?.debug?.(`[WPS] 发送多个图片（富文本） - 图片数量=${payload.mediaUrls.length}`);
+              await client.sendRichTextMessage(elements, targetId, parsed.chatType);
+              log?.debug?.(`[WPS] 多个图片消息发送成功`);
             }
             return;
           }
@@ -555,18 +607,24 @@ export async function handleWpsMessage(params: {
           // 3. 检查 mediaUrl（单个媒体URL）
           if (payload.mediaUrl) {
             try {
-              await client.sendImageMessage(payload.mediaUrl, parsed.chatId);
+              log?.debug?.(`[WPS] 发送单图片消息 - mediaUrl=${payload.mediaUrl}`);
+              await client.sendImageMessage(payload.mediaUrl, targetId, parsed.chatType);
+              log?.debug?.(`[WPS] 单图片消息发送成功`);
             } catch (err) {
               // 降级为文本消息
               log?.debug?.(`[WPS] 单图片消息发送失败，降级为文本: ${payload.mediaUrl}`);
-              await client.sendTextMessage(payload.text || payload.mediaUrl, parsed.chatId);
+              await client.sendTextMessage(payload.text || payload.mediaUrl, targetId, parsed.chatType);
+              log?.debug?.(`[WPS] 降级文本消息发送成功`);
             }
+            log?.debug?.(`[WPS] 单图片消息处理完成`);
             return;
           }
 
           // 4. 默认发送文本消息
           if (payload.text) {
-            await client.sendTextMessage(payload.text, parsed.chatId);
+            log?.debug?.(`[WPS] 发送纯文本消息 - 内容长度=${payload.text.length}`);
+            await client.sendTextMessage(payload.text, targetId, parsed.chatType, undefined, "markdown");
+            log?.debug?.(`[WPS] 纯文本消息发送成功`);
           }
         } catch (err: any) {
           log?.error?.(`[WPS] 回复失败: ${err.message}`);
@@ -630,3 +688,4 @@ function parseTextToRichTextElements(text: string): Array<{
 }
 
 export { detectMediaTypeFromExtension } from "./media-utils.js";
+

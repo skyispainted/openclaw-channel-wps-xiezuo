@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(del wps-api-test.ts)",
+      "Bash(temp_fix.sed:*)",
+      "Bash(sed -i -f temp_fix.sed src/outbound-service.ts)",
+      "Bash(rm temp_fix.sed)"
+    ]
+  }
+}

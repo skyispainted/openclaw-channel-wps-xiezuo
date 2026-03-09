@@ -82,6 +82,13 @@ openclaw gateway restart
 
 3. **网络访问**: 确保您的服务器能够访问WPS API（https://openapi.wps.cn）。
 
+4. **WPS应用权限设置**: 如果自动获取companyId失败并出现 "invalid_scope" 错误，请确保在WPS开发者平台中为您的应用申请了以下权限：
+   - `kso.user_base.read`: 用于读取当前用户信息（包括companyId）
+   - `kso.msg_write`: 用于发送消息到聊天
+   - `kso.group_read`: 用于读取群组信息
+
+   在WPS开发者后台的"应用权限"页面中，找到并勾选这些权限后提交审核，等待审批通过后才能正常使用自动配置功能。
+
 ## 故障排除
 
 如果仍然遇到问题：

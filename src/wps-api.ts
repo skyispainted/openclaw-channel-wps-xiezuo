@@ -2,6 +2,57 @@ import { companyTokenManager } from "./company-token.js";
 import { oauthTokenManager } from "./oauth-token.js";
 import { calculateWPS3Signature, calculateContentMd5, getRFC1123Date, generateKSO1AuthHeader } from "./crypto.js";
 
+/**
+ * @用户配置的Mention信息，用于构建消息中的@提及功能。
+ * 在调用sendTextMessage时传入此结构，会在消息中@指定用户或全体成员。
+ */
+export interface Mention {
+  /** @标记的索引ID，对应消息内容中的 <at id={index}> */
+  id: string;
+  /** @类型: user=特定用户, all=全体成员 */
+  type: "user" | "all";
+  /** 用户ID（当type="user"时必填） */
+  userId?: string;
+  /** 用户名称（当type="user"时必填） */
+  userName?: string;
+  /** 企业ID（可选，当跨企业时需要） */
+  companyId?: string;
+}
+
+/**
+ * 构建mentions数组，用于发送消息时@用户或@全体成员。
+ *
+ * @param mentions @用户配置数组，每个元素包含要@的用户或全体成员信息。
+ * @returns WPS API格式的mentions数组，或undefined（如果没有mentions）。
+ */
+function buildMentions(mentions?: Mention[]): any[] | undefined {
+  if (!mentions || mentions.length === 0) {
+    return undefined;
+  }
+
+  return mentions.map(m => {
+    if (m.type === "all") {
+      // @所有人，只需要id和type
+      return {
+        id: m.id,
+        type: "all",
+      };
+    }
+
+    // @特定用户，需要完整的identity信息
+    return {
+      id: m.id,
+      identity: {
+        id: m.userId,
+        name: m.userName,
+        type: "user" as const,
+        ...(m.companyId ? { company_id: m.companyId } : {}),
+      },
+      type: "user" as const,
+    };
+  });
+}
+
 export interface WPSResponse {
   result: number;
   msg?: string;
@@ -160,20 +211,55 @@ export class WPSClient {
   }
 
   /**
+   * 判定receiver的type类型。
+   *
+   * @param chatType 会话类型，来自ParsedMessage.chatType（"p2p"或"group"）。
+   * @param isEnterprisePartner 是否是关联组织的成员（用于区分"user"和"enterprise_partner_user"）。
+   * @returns receiver.type的值："user"、"enterprise_partner_user" 或 "chat"。
+   */
+  private getReceiverType(chatType: string, isEnterprisePartner: boolean = false): string {
+    if (chatType === "p2p") {
+      // 私聊消息，如果是关联组织成员则用"enterprise_partner_user"，否则用"user"
+      return isEnterprisePartner ? "enterprise_partner_user" : "user";
+    }
+    // 群聊消息用"chat"
+    return "chat";
+  }
+
+  /**
+   * 构造receiver对象。
+   *
+   * @param chatId 会话ID，私聊时为对方用户ID，群聊时为群聊ID。
+   * @param chatType 会话类型（"p2p"或"group"）。
+   * @param isEnterprisePartner 是否是关联组织的成员。
+   * @returns receiver对象。
+   */
+  private buildReceiver(chatId: string, chatType: string, isEnterprisePartner: boolean = false): any {
+    return {
+      receiver_id: chatId,
+      type: this.getReceiverType(chatType, isEnterprisePartner),
+    };
+  }
+
+  /**
    * ==================== 消息发送功能 ====================
    */
 
   /**
-   * 发送文本消息
+   * 发送文本消息（支持@用户和@全体成员）
    *
-   * @param text 消息内容
-   * @param chatId 会话ID
-   * @param type 消息类型: "plain" | "markdown"（默认为 "markdown"）
-   * @returns 消息发送结果
+   * @param text 消息内容（支持Markdown格式，可以在内容中使用 &lt;at id="1"&gt;@某人&lt;/at&gt; 格式）
+   * @param chatId 会话ID（私聊时为对方用户ID，群聊时为群聊ID）
+   * @param chatType 会话类型："p2p"=私聊，"group"=群聊（从ParsedMessage.chatType获取）
+   * @param mentions 可选，@用户或@全体成员配置数组。当type="user"时，userId和userName必填。
+   * @param type 消息内容类型："plain" | "markdown"（默认为 "markdown"）
+   * @returns 消息发送结果，包含message_id等信息。
    */
   async sendTextMessage(
     text: string,
     chatId: string,
+    chatType: string,
+    mentions?: Mention[],
     type: "plain" | "markdown" = "markdown"
   ): Promise<WPSResponse> {
     if (!text || text.trim().length === 0) {
@@ -190,12 +276,13 @@ export class WPSClient {
       this.apiUrl
     );
 
-    const message = {
+    // 构造receiver
+    const receiver = this.buildReceiver(chatId, chatType);
+
+    // 构造消息体，添加mentions字段（如果有）
+    const message: any = {
       type: "text",
-      receiver: {
-        receiver_id: chatId,
-        type: "chat",
-      },
+      receiver: receiver,
       content: {
         text: {
           content: text.trim(),
@@ -203,6 +290,11 @@ export class WPSClient {
         },
       },
     };
+
+    // 如果有mentions，添加到消息体中（仅对群聊有效）
+    if (mentions && mentions.length > 0) {
+      message.content.text.mentions = buildMentions(mentions);
+    }
 
     const path = `/v7/messages/create`;
     const result = await this.sendV7Request("POST", path, message, accessToken);
@@ -218,12 +310,14 @@ export class WPSClient {
    * 发送富文本消息
    *
    * @param elements 富文本元素数组
-   * @param chatId 会话ID
+   * @param chatId 会话ID（私聊时为对方用户ID，群聊时为群聊ID）
+   * @param chatType 会话类型："p2p"=私聊，"group"=群聊
    * @returns 消息发送结果
    */
   async sendRichTextMessage(
     elements: RichTextElement[],
-    chatId: string
+    chatId: string,
+    chatType: string
   ): Promise<WPSResponse> {
     if (!elements || elements.length === 0) {
       throw new Error("富文本内容不能为空");
@@ -239,12 +333,12 @@ export class WPSClient {
       this.apiUrl
     );
 
+    // 构造receiver
+    const receiver = this.buildReceiver(chatId, chatType);
+
     const message = {
       type: "rich_text",
-      receiver: {
-        receiver_id: chatId,
-        type: "chat",
-      },
+      receiver: receiver,
       content: {
         rich_text: {
           elements: elements,
@@ -266,13 +360,15 @@ export class WPSClient {
    * 发送图片消息
    *
    * @param storageKey 图片存储key
-   * @param chatId 会话ID
+   * @param chatId 会话ID（私聊时为对方用户ID，群聊时为群聊ID）
+   * @param chatType 会话类型："p2p"=私聊，"group"=群聊
    * @param options 可选参数
    * @returns 消息发送结果
    */
   async sendImageMessage(
     storageKey: string,
     chatId: string,
+    chatType: string,
     options?: {
       type?: "image/png" | "image/jpg" | "image/gif" | "image/webp";
       name?: string;
@@ -297,6 +393,9 @@ export class WPSClient {
       this.apiUrl
     );
 
+    // 构造receiver
+    const receiver = this.buildReceiver(chatId, chatType);
+
     const imageContent: any = {
       storage_key: storageKey,
       type: options?.type || "image/jpeg",
@@ -313,10 +412,7 @@ export class WPSClient {
 
     const message = {
       type: "image",
-      receiver: {
-        receiver_id: chatId,
-        type: "chat",
-      },
+      receiver: receiver,
       content: {
         image: imageContent,
       },
@@ -336,7 +432,8 @@ export class WPSClient {
    * 发送文件消息（本地文件）
    *
    * @param storageKey 文件存储key
-   * @param chatId 会话ID
+   * @param chatId 会话ID（私聊时为对方用户ID，群聊时为群聊ID）
+   * @param chatType 会话类型："p2p"=私聊，"group"=群聊
    * @param name 文件名称
    * @param size 文件大小（可选）
    * @returns 消息发送结果
@@ -344,6 +441,7 @@ export class WPSClient {
   async sendFileMessage(
     storageKey: string,
     chatId: string,
+    chatType: string,
     name: string,
     size?: number
   ): Promise<WPSResponse> {
@@ -365,12 +463,12 @@ export class WPSClient {
       this.apiUrl
     );
 
+    // 构造receiver
+    const receiver = this.buildReceiver(chatId, chatType);
+
     const message = {
       type: "file",
-      receiver: {
-        receiver_id: chatId,
-        type: "chat",
-      },
+      receiver: receiver,
       content: {
         file: {
           type: "local",
@@ -397,13 +495,15 @@ export class WPSClient {
    * 发送音频消息
    *
    * @param storageKey 音频存储key
-   * @param chatId 会话ID
+   * @param chatId 会话ID（私聊时为对方用户ID，群聊时为群聊ID）
+   * @param chatType 会话类型："p2p"=私聊，"group"=群聊
    * @param options 音频信息
    * @returns 消息发送结果
    */
   async sendAudioMessage(
     storageKey: string,
     chatId: string,
+    chatType: string,
     options: {
       duration: number;
       format?: "wav" | "amr";
@@ -428,6 +528,9 @@ export class WPSClient {
       this.apiUrl
     );
 
+    // 构造receiver
+    const receiver = this.buildReceiver(chatId, chatType);
+
     const audioContent = {
       storage_key: storageKey,
       media: {
@@ -443,10 +546,7 @@ export class WPSClient {
 
     const message = {
       type: "audio",
-      receiver: {
-        receiver_id: chatId,
-        type: "chat",
-      },
+      receiver: receiver,
       content: {
         audio: audioContent,
       },
@@ -466,13 +566,15 @@ export class WPSClient {
    * 发送视频消息
    *
    * @param storageKey 视频存储key
-   * @param chatId 会话ID
+   * @param chatId 会话ID（私聊时为对方用户ID，群聊时为群聊ID）
+   * @param chatType 会话类型："p2p"=私聊，"group"=群聊
    * @param options 视频信息
    * @returns 消息发送结果
    */
   async sendVideoMessage(
     storageKey: string,
     chatId: string,
+    chatType: string,
     options: {
       duration: number;
       format?: "mp4";
@@ -497,6 +599,9 @@ export class WPSClient {
       this.apiUrl
     );
 
+    // 构造receiver
+    const receiver = this.buildReceiver(chatId, chatType);
+
     const videoContent: any = {
       storage_key: storageKey,
       media: {
@@ -515,10 +620,7 @@ export class WPSClient {
 
     const message = {
       type: "video",
-      receiver: {
-        receiver_id: chatId,
-        type: "chat",
-      },
+      receiver: receiver,
       content: {
         video: videoContent,
       },
